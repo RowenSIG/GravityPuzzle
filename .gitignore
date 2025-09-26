@@ -4,3 +4,6 @@ UserSettings
 *.sln
 Logs
 Library
+Temp
+Assets/_Recovery
+Assets/_Recovery.meta

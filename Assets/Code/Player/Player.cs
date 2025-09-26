@@ -18,6 +18,12 @@ public class Player : MonoBehaviour
 
     [SerializeField]
     private PlayerGravRaycastControl gravControls;
+    [SerializeField]
+    private PlayerGrabControls grabControls;
+
+    [SerializeField]
+    private Camera playerCamera;
+    public Camera PlayerCamera => playerCamera;
 
     private PlayerConfiguration config;
 
@@ -37,6 +43,7 @@ public class Player : MonoBehaviour
         visualsControls.Setup(config, this);
         weaponControls.Setup(config, this);
         gravControls.Setup(config, this);
+        grabControls.Setup(config, this);
     }
 
     public void InitialiseInput(InputDevice[] devices, int playerIndex, InputSystem_Actions inputControls)
@@ -53,20 +60,23 @@ public class Player : MonoBehaviour
         Vector2 look = input.LookAction.ReadValue<Vector2>();
         bool jump = input.JumpAction.WasPerformedThisFrame();
         bool fire = input.FireAction.IsPressed();
+        bool altFire = input.AltFireAction.IsPressed();
 
         // Log($"[Player] Update move[{move}] look[{look}] jump[{jump}] fire[{fire}]");
 
         visualsControls.UpdateLookInput(look);
         physicsControls.UpdateMoveInput(move, jump);
         cameraControls.UpdateLookInput(look);
-        weaponControls.UpdateFireInput(fire);
+        weaponControls.UpdateFireInput(fire, altFire);
         gravControls.UpdateFireInput(fire);
+        grabControls.UpdateFireInput(fire);
     }
 
     void FixedUpdate()
     {
         physicsControls.UpdateFixedPhysics();
         gravControls.UpdateFixedPhysics();
+        grabControls.UpdateFixedPhysics();
     }
 
     public void SetNewPlayerUp(Vector3 up)

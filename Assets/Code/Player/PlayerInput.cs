@@ -12,6 +12,7 @@ public class PlayerInput : MonoBehaviour
     public InputAction LookAction { get; private set; }
     public InputAction JumpAction { get; private set; }
     public InputAction FireAction { get; private set; }
+    public InputAction AltFireAction { get; private set; }
     public InputAction NextWeaponAction { get; private set; }
     public InputAction PrevWeaponAction { get; private set; }
 
@@ -35,6 +36,7 @@ public class PlayerInput : MonoBehaviour
                 LookAction = inputControls.Player1Game.Look;
                 JumpAction = inputControls.Player1Game.Jump;
                 FireAction = inputControls.Player1Game.Attack;
+                AltFireAction = inputControls.Player1Game.AltAttack;
                 NextWeaponAction = inputControls.Player1Game.Next;
                 PrevWeaponAction = inputControls.Player1Game.Previous;
                 break;
@@ -44,6 +46,7 @@ public class PlayerInput : MonoBehaviour
                 LookAction = inputControls.Player2Game.Look;
                 JumpAction = inputControls.Player2Game.Jump;
                 FireAction = inputControls.Player2Game.Attack;
+                AltFireAction = inputControls.Player2Game.AltAttack;
                 NextWeaponAction = inputControls.Player2Game.Next;
                 PrevWeaponAction = inputControls.Player2Game.Previous;
                 break;

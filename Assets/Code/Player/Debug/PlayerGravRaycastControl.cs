@@ -80,8 +80,6 @@ public class PlayerGravRaycastControl : PlayerComponentControls
 
     protected void CollisionEnter(Collision collision)
     {
-        Log($"[PlayerGravRaycastControl] OnCollisionEnter[{collision}]");
-
         if (collision.collider == previousCollider)
         {
             if (previousColliderIgnoreTimer > 0)
