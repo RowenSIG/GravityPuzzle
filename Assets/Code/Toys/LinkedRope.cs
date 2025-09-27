@@ -8,8 +8,8 @@ public class LinkedRope : MonoBehaviour
 
     public GameObject link0;
     public Vector3 linkOffset;
-    private List<GameObject> links = new List<GameObject>();
 
+    protected List<GameObject> links = new List<GameObject>();
     protected virtual void Awake()
     {
         CreateLinks();

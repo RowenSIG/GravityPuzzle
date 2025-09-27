@@ -23,7 +23,7 @@ public class PlayerVisualsControls : PlayerComponentControls
     {
         float x = input.x;
         //jitter!?
-        if (Mathf.Abs(x) < 3)
+        if (Mathf.Abs(x) < 1)
         {
             x = 0;
         }

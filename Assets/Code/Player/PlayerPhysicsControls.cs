@@ -21,7 +21,7 @@ public class PlayerPhysicsControls : PlayerComponentControls
 
     public void UpdateFixedPhysics()
     {
-        var gravity = -9.81f * PlayerUp;
+        var gravity = -1f * Game.GRAVITY_ACCELERATION * PlayerUp;
         body.AddForce(gravity * body.mass, ForceMode.Acceleration);
 
         //drag

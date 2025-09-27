@@ -8,28 +8,35 @@ public class ProjectileLinkedRope : LinkedRope
     [SerializeField]
     private Rigidbody hardPoint;
 
+
+
     protected override void Awake()
     {
         //don't do base awake.
     }
 
-    public void Shoot(Vector3 targetPos, Vector3 direction)
+    public void Shoot(Vector3 targetPos, Vector3 direction, Vector3 hitGravity)
     {
         //instant transmission, for now
         transform.position = targetPos;
         transform.up = direction;
 
-//        StartCoroutine(CoCreateLinks());
         hardPoint.isKinematic = true;
-        CreateLinks();
+        StartCoroutine( CoCreateLinks(hitGravity) );
 
     }
 
-    IEnumerator CoCreateLinks()
+    IEnumerator CoCreateLinks(Vector3 gravityVector )
     {
-        yield return new WaitForSeconds(1f);
-
         CreateLinks();
+
+        yield return new WaitForEndOfFrame();
+
+        foreach (var link in links)
+        {
+            var grav = link.AddComponent<DirectionalGravity>();
+            grav.AssignGravityDirection(gravityVector);
+        }
     }
 }
 

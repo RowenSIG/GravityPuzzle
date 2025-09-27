@@ -57,16 +57,16 @@ public class PlayerWeaponRopeProjectile : PlayerWeapon
         if (hit)
         {
             //we're going to just plonk a rope there...
-            FireProjectileAtLocation(hitinfo.point, ray.direction);
+            FireProjectileAtLocation(hitinfo.point, ray.direction, hitinfo.normal);
 
             RemoveOldestRopeIfNecessary();
         }
     }
 
-    private void FireProjectileAtLocation(Vector3 targetPoint, Vector3 direction)
+    private void FireProjectileAtLocation(Vector3 targetPoint, Vector3 direction, Vector3 gravityNormal)
     {
         var clone = Instantiate(projectileRopePrefab);
-        clone.Shoot(targetPoint, direction);
+        clone.Shoot(targetPoint, direction, gravityNormal);
         ropes.Add(clone);
     }
 
@@ -78,6 +78,12 @@ public class PlayerWeaponRopeProjectile : PlayerWeapon
             ropes.RemoveAt(0);
             GameObject.Destroy(rope.gameObject);
         }
+    }
+
+    private void FixedUpdate()
+    {
+        //apply our regular gravity...
+
     }
 
 }
