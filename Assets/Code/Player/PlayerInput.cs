@@ -15,7 +15,7 @@ public class PlayerInput : MonoBehaviour
     public InputAction AltFireAction { get; private set; }
     public InputAction NextWeaponAction { get; private set; }
     public InputAction PrevWeaponAction { get; private set; }
-
+    public InputAction ScrollWeaponAction { get; private set; }
 
     public void Initialise(InputDevice[] devices, int playerIndex, InputSystem_Actions inputControls)
     {
@@ -39,6 +39,7 @@ public class PlayerInput : MonoBehaviour
                 AltFireAction = inputControls.Player1Game.AltAttack;
                 NextWeaponAction = inputControls.Player1Game.Next;
                 PrevWeaponAction = inputControls.Player1Game.Previous;
+                ScrollWeaponAction = inputControls.Player1Game.MouseScroll;
                 break;
             case 1:
                 actionMap = inputControls.Player2Game;

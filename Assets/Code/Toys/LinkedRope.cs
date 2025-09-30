@@ -38,9 +38,8 @@ public class LinkedRope : MonoBehaviour
         links.Add(clone);
     }
 
-    // Update is called once per frame
-    void Update()
+    public GameObject LastLink()
     {
-        
+        return links.End();
     }
 }

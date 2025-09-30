@@ -41,6 +41,8 @@ public class Player : MonoBehaviour
 
     public Action OnNewPlayerUp = () => { };
 
+    public bool RopeSwinging { get; private set; }
+
     private List<PlayerComponentControls> allControls;
     public void Setup(PlayerConfiguration config)
     {
@@ -81,13 +83,13 @@ public class Player : MonoBehaviour
             control.UpdateLookInput(look);
             control.UpdateMoveInput(move, jump);
             control.UpdateFireInput(fire, altFire);
-            control.UpdatePrevNextInput(previousWeapon, nextWeapon);
+            control.UpdatePrevNextInput(previousWeapon, nextWeapon,  input.ScrollWeaponAction.ReadValue<Vector2>().y );
         }
     }
 
     void FixedUpdate()
     {
-        
+
         foreach (var control in allControls)
         {
             control.UpdateFixedPhysics();
@@ -96,11 +98,43 @@ public class Player : MonoBehaviour
 
     public void SetNewPlayerUp(Vector3 up)
     {
+        canJump = true;
         if (Vector3.Dot(up, playerUp) > 0.999f)
             return;
 
         Log($"[PlayerComponentControls] SetNewPlayerUp [{up}]");
         playerUp = up;
         OnNewPlayerUp.Invoke();
+
+    }
+
+    private bool canJump = true;
+    public bool CanJump()
+    {
+        //umm.
+        if (RopeSwinging)
+        {
+            return true;
+        }
+        return canJump;
+    }
+    public void Jump()
+    {
+        canJump = false;
+        ReleaseRope();
+    }
+
+    private Joint ropeSwingJoint;
+    public void StartedRopeSwinging(Joint swingJoint)
+    {
+        ropeSwingJoint = swingJoint;
+        RopeSwinging = true;
+    }
+    public void ReleaseRope()
+    {
+        canJump = false;
+        Destroy(ropeSwingJoint);
+        RopeSwinging = false;
+        ropeSwingJoint = null;
     }
 }

@@ -17,3 +17,9 @@ MonoBehaviour:
   forwardMoveSpeed: 10
   backwardMoveSpeed: 10
   sidewaysMoveSpeed: 10
+  forwardSwingSpeed: 12
+  backwardSwingSpeed: 12
+  sidewaysSwingSpeed: 12
+  jumpForce: 6
+  swingJumpDirectionalForce: 3
+  linearVelocityDrag: 0.94

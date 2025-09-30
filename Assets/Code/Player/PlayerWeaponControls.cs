@@ -40,28 +40,33 @@ public class PlayerWeaponControls : PlayerComponentControls
         currentWeapon.UpdateWeapon(PlayerDT, leftInput, rightInput);
     }
 
-    public override void UpdatePrevNextInput(bool prev, bool next)
+    public override void UpdatePrevNextInput(bool prev, bool next, float scrollInput)
     {
+        if (scrollInput < 0)
+            prev |= true;
+        if (scrollInput > 0)
+            next |= true;    
+        
         if (prev)
-        {
-            switch (currentWeapon)
             {
-                default:
-                case PlayerWeaponZeroSword: SetCurrentWeapon(gravitationGauntletWeapon); break;
-                case PlayerWeaponGravitationGauntlet: SetCurrentWeapon(ropeProjectileWeapon); break;
-                case PlayerWeaponRopeProjectile: SetCurrentWeapon(zeroSwordWeapon); break;
+                switch (currentWeapon)
+                {
+                    default:
+                    case PlayerWeaponZeroSword: SetCurrentWeapon(gravitationGauntletWeapon); break;
+                    case PlayerWeaponGravitationGauntlet: SetCurrentWeapon(ropeProjectileWeapon); break;
+                    case PlayerWeaponRopeProjectile: SetCurrentWeapon(zeroSwordWeapon); break;
+                }
             }
-        }
-        else if(next)
-        {
-            switch (currentWeapon)
+            else if (next)
             {
-                default:
-                case PlayerWeaponZeroSword: SetCurrentWeapon(ropeProjectileWeapon); break;
-                case PlayerWeaponGravitationGauntlet: SetCurrentWeapon(zeroSwordWeapon); break;
-                case PlayerWeaponRopeProjectile: SetCurrentWeapon(gravitationGauntletWeapon); break;
+                switch (currentWeapon)
+                {
+                    default:
+                    case PlayerWeaponZeroSword: SetCurrentWeapon(ropeProjectileWeapon); break;
+                    case PlayerWeaponGravitationGauntlet: SetCurrentWeapon(zeroSwordWeapon); break;
+                    case PlayerWeaponRopeProjectile: SetCurrentWeapon(gravitationGauntletWeapon); break;
+                }
             }
-        }
     }
 
 }

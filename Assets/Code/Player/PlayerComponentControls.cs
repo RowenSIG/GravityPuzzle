@@ -15,7 +15,7 @@ public abstract class PlayerComponentControls : MonoBehaviour
     public virtual void UpdateMoveInput(Vector2 moveInput, bool jumpInput) { }
     public virtual void UpdateFireInput(bool leftInput, bool rightInput) { }
     public virtual void UpdateFixedPhysics() { }
-    public virtual void UpdatePrevNextInput(bool prev, bool next) { }
+    public virtual void UpdatePrevNextInput(bool prev, bool next, float scrollDirection) { }
 
     protected Vector3 PlayerUp
     {

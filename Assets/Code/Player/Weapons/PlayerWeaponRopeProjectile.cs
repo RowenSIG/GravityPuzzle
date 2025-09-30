@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 public class PlayerWeaponRopeProjectile : PlayerWeapon
@@ -15,6 +16,9 @@ public class PlayerWeaponRopeProjectile : PlayerWeapon
     private float reloadTimer = 0f;
     private bool canFire = true;
 
+    private float ropeClimbTime = 0.8f;
+    private float ropeClimbTimer = 0f;
+
     private List<ProjectileLinkedRope> ropes = new List<ProjectileLinkedRope>();
 
     private bool CanFire
@@ -30,18 +34,22 @@ public class PlayerWeaponRopeProjectile : PlayerWeapon
         }
     }
 
+
     public override void UpdateWeapon(float deltaTime, bool leftFire, bool rightFire)
     {
         reloadTimer -= deltaTime;
 
-        if (CanFire && rightFire)
+        if (rightFire)
         {
-            Fire();
+            if (CanFire)
+                Fire();
+            else
+                FireHeld();
         }
 
         if (rightFire == false)
         {
-            canFire = true;
+            FireReleased();
         }
     }
 
@@ -63,6 +71,51 @@ public class PlayerWeaponRopeProjectile : PlayerWeapon
         }
     }
 
+    private void FireReleased()
+    {
+        canFire = true;
+        ropeClimbTimer = 0f;
+
+        if (player.RopeSwinging)
+        {
+            player.ReleaseRope();
+        }
+    }
+
+    private void FireHeld()
+    {
+        //we need to somehow swing off a rope...
+
+        //1 - we must move towards our rope anchor
+        //2 - our player becomes linked to the end of the rope
+
+        if (player.RopeSwinging == false)
+        {
+            if (ropeClimbTimer < ropeClimbTime)
+            {
+                ropeClimbTimer += Time.deltaTime;
+                return;
+            }
+        }
+
+        if (player.RopeSwinging == false && ropeClimbTimer > ropeClimbTime)
+        {
+            //set to very low. it'll never time up
+            ropeClimbTimer = Mathf.NegativeInfinity;
+
+            var lastRope = ropes.Last();
+            var lastLink = lastRope.LastLink();
+
+            var ropeEndPos = lastLink.transform.position;
+            player.transform.position = ropeEndPos;
+
+            var joint = lastLink.AddComponent<CharacterJoint>();
+            joint.connectedBody = player.Body;
+            player.Body.mass = 1;
+            player.StartedRopeSwinging(joint);
+        }
+    }
+
     private void FireProjectileAtLocation(Vector3 targetPoint, Vector3 direction, Vector3 gravityNormal)
     {
         var clone = Instantiate(projectileRopePrefab);
@@ -78,12 +131,6 @@ public class PlayerWeaponRopeProjectile : PlayerWeapon
             ropes.RemoveAt(0);
             GameObject.Destroy(rope.gameObject);
         }
-    }
-
-    private void FixedUpdate()
-    {
-        //apply our regular gravity...
-
     }
 
 }

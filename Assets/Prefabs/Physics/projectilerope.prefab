@@ -159,7 +159,7 @@ CharacterJoint:
   m_SwingAxis: {x: 0, y: 1, z: 0}
   m_TwistLimitSpring:
     spring: 0
-    damper: 10
+    damper: 0
   m_LowTwistLimit:
     limit: -20
     bounciness: 0
@@ -170,7 +170,7 @@ CharacterJoint:
     contactDistance: 0
   m_SwingLimitSpring:
     spring: 0
-    damper: 10
+    damper: 0
   m_Swing1Limit:
     limit: 40
     bounciness: 0
@@ -373,7 +373,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a1f160be34ccab14da67919dca01ba17, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProjectileLinkedRope
-  numLinks: 5
+  numLinks: 7
   link0: {fileID: 106874871073907082}
   linkOffset: {x: 0, y: -0.5, z: 0}
   hardPoint: {fileID: 664548905259779744}
