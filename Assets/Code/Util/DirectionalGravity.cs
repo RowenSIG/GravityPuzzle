@@ -6,11 +6,20 @@ public class DirectionalGravity : MonoBehaviour
 {
     [SerializeField]
     private Rigidbody body;
-    private Vector3? gravityDirection;
+
+    [SerializeField]
+    private Vector3 gravityDirection;
+
+    [SerializeField]
+    private bool assignGravityOnAwake;
 
     private void Awake()
     {
         EnsureBodyReference();
+        if (assignGravityOnAwake)
+        {
+            AssignGravityDirection(gravityDirection);
+        }
     }
 
     private void EnsureBodyReference()
@@ -34,9 +43,9 @@ public class DirectionalGravity : MonoBehaviour
 
     private void FixedUpdate()
     {
-        if (body != null && gravityDirection.HasValue)
+        if ( body != null )
         {
-            body.AddForce(gravityDirection.Value * Game.GRAVITY_ACCELERATION * Time.fixedDeltaTime, ForceMode.VelocityChange);
+            body.AddForce(gravityDirection * Game.GRAVITY_ACCELERATION * Time.fixedDeltaTime, ForceMode.VelocityChange);
         }
     }
 }

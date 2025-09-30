@@ -11,6 +11,11 @@ public abstract class PlayerComponentControls : MonoBehaviour
         this.player = player;
     }
 
+    public virtual void UpdateLookInput(Vector2 input) { }
+    public virtual void UpdateMoveInput(Vector2 moveInput, bool jumpInput) { }
+    public virtual void UpdateFireInput(bool leftInput, bool rightInput) { }
+    public virtual void UpdateFixedPhysics() { }
+
     protected Vector3 PlayerUp
     {
         get

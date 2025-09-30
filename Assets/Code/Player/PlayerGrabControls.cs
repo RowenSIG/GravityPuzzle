@@ -17,13 +17,13 @@ public class PlayerGrabControls : PlayerComponentControls
     }
     private GrabState grab = null;
 
-    public void UpdateFireInput(bool fire)
+    public override void UpdateFireInput(bool leftFire, bool rightFire)
     {
         //bang
 
         if (grab == null)
         {
-            if (fire)
+            if (leftFire)
             {
                 var ray = player.PlayerCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
 
@@ -38,7 +38,7 @@ public class PlayerGrabControls : PlayerComponentControls
         }
         else
         {
-            if (fire == false)
+            if (leftFire == false)
             {
                 grab = null;
             }
@@ -48,7 +48,7 @@ public class PlayerGrabControls : PlayerComponentControls
 
     }
 
-    public void UpdateFixedPhysics()
+    public override void UpdateFixedPhysics()
     {
         if (grab != null)
         {

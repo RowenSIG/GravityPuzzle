@@ -10,9 +10,10 @@ public class PlayerGravRaycastControl : PlayerComponentControls
 
     [SerializeField]
     private CollisionReactor collisionReactor;
-    
 
+#if DO_RAYCASTS
     private bool firing = false;
+#endif
 
     protected void Awake()
     {
@@ -23,11 +24,12 @@ public class PlayerGravRaycastControl : PlayerComponentControls
         collisionReactor.OnOnCollisionEnter -= CollisionEnter;
     }
 
-    public void UpdateFireInput(bool fire)
+    public override void UpdateFireInput(bool leftFire, bool rightFire)
     {
         return;
 
-        if (fire && firing == false)
+#if DO_RAYCASTS
+        if (leftFire && firing == false)
         {
             firing = true;
             //cast the ray!
@@ -43,10 +45,11 @@ public class PlayerGravRaycastControl : PlayerComponentControls
                 player.SetNewPlayerUp(normal);
             }
         }
-        else if (fire == false)
+        else if (leftFire == false)
         {
             firing = false;
         }
+#endif
     }
 
     private Collider currentCollider = null;
@@ -54,7 +57,7 @@ public class PlayerGravRaycastControl : PlayerComponentControls
     private float previousColliderIgnoreTimer = 0f;
     private const float IGNORE_TIMER = 0.3f;
 
-    public void UpdateFixedPhysics()
+    public override void UpdateFixedPhysics()
     {
         //how do we figure out what our floor is?
         previousColliderIgnoreTimer -= Time.deltaTime;

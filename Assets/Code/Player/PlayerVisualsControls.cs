@@ -19,7 +19,7 @@ public class PlayerVisualsControls : PlayerComponentControls
         player.OnNewPlayerUp -= OnNewPlayerUp;
     }
 
-    public void UpdateLookInput(Vector2 input)
+    public override void UpdateLookInput(Vector2 input)
     {
         float x = input.x;
         //jitter!?
@@ -90,12 +90,4 @@ public class PlayerVisualsControls : PlayerComponentControls
         }
     }
 
-#if DEBUG
-
-    protected void OnDrawGizmos()
-    {
-       
-    }
-
-#endif
 }

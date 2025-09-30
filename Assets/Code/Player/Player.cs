@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using static Logging;
@@ -35,15 +37,18 @@ public class Player : MonoBehaviour
 
     public Action OnNewPlayerUp = () => { };
 
+    private List<PlayerComponentControls> allControls;
     public void Setup(PlayerConfiguration config)
     {
         this.config = config;
-        cameraControls.Setup(config, this);
-        physicsControls.Setup(config, this);
-        visualsControls.Setup(config, this);
-        weaponControls.Setup(config, this);
-        gravControls.Setup(config, this);
-        grabControls.Setup(config, this);
+
+        var found = gameObject.GetComponentsInChildren<PlayerComponentControls>();
+        allControls = new List<PlayerComponentControls>(found);
+
+        foreach (var control in allControls)
+        {
+            control.Setup(config, this);
+        }
     }
 
     public void InitialiseInput(InputDevice[] devices, int playerIndex, InputSystem_Actions inputControls)
@@ -64,19 +69,21 @@ public class Player : MonoBehaviour
 
         // Log($"[Player] Update move[{move}] look[{look}] jump[{jump}] fire[{fire}]");
 
-        visualsControls.UpdateLookInput(look);
-        physicsControls.UpdateMoveInput(move, jump);
-        cameraControls.UpdateLookInput(look);
-        weaponControls.UpdateFireInput(fire, altFire);
-        gravControls.UpdateFireInput(fire);
-        grabControls.UpdateFireInput(fire);
+        foreach (var control in allControls)
+        {
+            control.UpdateLookInput(look);
+            control.UpdateMoveInput(move, jump);
+            control.UpdateFireInput(fire, altFire);
+        }
     }
 
     void FixedUpdate()
     {
-        physicsControls.UpdateFixedPhysics();
-        gravControls.UpdateFixedPhysics();
-        grabControls.UpdateFixedPhysics();
+        
+        foreach (var control in allControls)
+        {
+            control.UpdateFixedPhysics();
+        }
     }
 
     public void SetNewPlayerUp(Vector3 up)

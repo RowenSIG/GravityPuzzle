@@ -7,7 +7,7 @@ public class PlayerPhysicsControls : PlayerComponentControls
     private Rigidbody body;
 
 
-    public void UpdateMoveInput(Vector2 moveInput, bool jumpInput)
+    public override void UpdateMoveInput(Vector2 moveInput, bool jumpInput)
     {
         var forwardForce = Mathf.Clamp(moveInput.y, 0f, 1f) * PlayerDT * config.forwardMoveSpeed;
         var backwardForce = Mathf.Clamp(moveInput.y, -1f, 0f) * PlayerDT * config.backwardMoveSpeed;
@@ -19,7 +19,7 @@ public class PlayerPhysicsControls : PlayerComponentControls
 
     }
 
-    public void UpdateFixedPhysics()
+    public override void UpdateFixedPhysics()
     {
         var gravity = -1f * Game.GRAVITY_ACCELERATION * PlayerUp;
         body.AddForce(gravity * body.mass, ForceMode.Acceleration);
