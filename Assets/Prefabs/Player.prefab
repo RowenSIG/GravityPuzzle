@@ -178,6 +178,56 @@ MeshRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_AdditionalVertexStreams: {fileID: 0}
+--- !u!1 &659006295840109030
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 9122063096072375134}
+  - component: {fileID: 8900635312213708855}
+  m_Layer: 9
+  m_Name: ZeroSwordWeapon
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &9122063096072375134
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 659006295840109030}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8379119688482430505}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &8900635312213708855
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 659006295840109030}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0b8f7c227bbe2404d9894ed058700cd1, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::PlayerWeaponZeroSword
+  weaponRange: 1.8
+  arcAngle: 140
+  arcTime: 0.1
+  arcAxis: {x: 0.5, y: 1, z: 0}
+  strikeForce: 5
+  reloadTime: 1
 --- !u!1 &798748348927436189
 GameObject:
   m_ObjectHideFlags: 0
@@ -789,6 +839,7 @@ MonoBehaviour:
   gravControls: {fileID: 5026185663852391984}
   grabControls: {fileID: -1339204202815890612}
   playerCamera: {fileID: 548324880054619696}
+  body: {fileID: 129644481352402749}
 --- !u!114 &5271933873400931528
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -827,7 +878,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 95a5c30246707ec43a59053511b94dec, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerPhysicsControls
-  body: {fileID: 129644481352402749}
 --- !u!114 &5026185663852391984
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1344,6 +1394,7 @@ Transform:
   m_Children:
   - {fileID: 7619846213512273541}
   - {fileID: 2413151046613140904}
+  - {fileID: 9122063096072375134}
   m_Father: {fileID: 5708351176362621674}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
 --- !u!114 &4668589236579819465
@@ -1360,6 +1411,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerWeaponControls
   ropeProjectileWeapon: {fileID: 6601961760716500292}
   gravitationGauntletWeapon: {fileID: 5557485170274651651}
+  zeroSwordWeapon: {fileID: 8900635312213708855}
 --- !u!1 &6393189499022817686
 GameObject:
   m_ObjectHideFlags: 0

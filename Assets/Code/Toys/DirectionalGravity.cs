@@ -9,6 +9,7 @@ public class DirectionalGravity : MonoBehaviour
 
     [SerializeField]
     private Vector3 gravityDirection;
+    public Vector3 GravityDirection => gravityDirection;
 
     [SerializeField]
     private bool assignGravityOnAwake;

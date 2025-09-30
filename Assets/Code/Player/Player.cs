@@ -27,6 +27,10 @@ public class Player : MonoBehaviour
     private Camera playerCamera;
     public Camera PlayerCamera => playerCamera;
 
+    [SerializeField]
+    private Rigidbody body;
+    public Rigidbody Body => body;
+
     private PlayerConfiguration config;
 
     private Vector3 playerUp = Vector3.up;

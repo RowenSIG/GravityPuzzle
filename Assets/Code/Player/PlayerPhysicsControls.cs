@@ -3,9 +3,7 @@ using static Logging;
 
 public class PlayerPhysicsControls : PlayerComponentControls
 {
-    [SerializeField]
-    private Rigidbody body;
-
+    private Rigidbody Body => player.Body;
 
     public override void UpdateMoveInput(Vector2 moveInput, bool jumpInput)
     {
@@ -15,22 +13,22 @@ public class PlayerPhysicsControls : PlayerComponentControls
         var sidewaysForce = moveInput.x * PlayerDT * config.sidewaysMoveSpeed;
 
         var force = new Vector3(sidewaysForce, 0, forwardForce + backwardForce);
-        body.AddRelativeForce(force, ForceMode.VelocityChange);
+        Body.AddRelativeForce(force, ForceMode.VelocityChange);
 
     }
 
     public override void UpdateFixedPhysics()
     {
         var gravity = -1f * Game.GRAVITY_ACCELERATION * PlayerUp;
-        body.AddForce(gravity * body.mass, ForceMode.Acceleration);
+        Body.AddForce(gravity * Body.mass, ForceMode.Acceleration);
 
         //drag
-        var velocity = body.linearVelocity;
+        var velocity = Body.linearVelocity;
         //don't drag falling
         var fallingComponent = Vector3.Dot(PlayerUp, velocity) * PlayerUp.normalized;
         velocity -= fallingComponent;
         velocity *= 0.9f;
         velocity += fallingComponent;
-        body.linearVelocity = velocity;
+        Body.linearVelocity = velocity;
     }
 }
