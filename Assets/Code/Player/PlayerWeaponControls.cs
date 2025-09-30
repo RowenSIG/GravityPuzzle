@@ -11,6 +11,7 @@ public class PlayerWeaponControls : PlayerComponentControls
     [SerializeField]
     private PlayerWeaponZeroSword zeroSwordWeapon;
 
+    private PlayerWeapon currentWeapon;
 
     public override void Setup(PlayerConfiguration config, Player player)
     {
@@ -19,17 +20,48 @@ public class PlayerWeaponControls : PlayerComponentControls
         ropeProjectileWeapon.Setup(player);
         gravitationGauntletWeapon.Setup(player);
         zeroSwordWeapon.Setup(player);
+
+        SetCurrentWeapon(gravitationGauntletWeapon);
+    }
+
+    private void SetCurrentWeapon(PlayerWeapon weapon)
+    {
+        ropeProjectileWeapon.gameObject.EnsureActive(false);
+        gravitationGauntletWeapon.gameObject.EnsureActive(false);
+        zeroSwordWeapon.gameObject.EnsureActive(false);
+
+        currentWeapon = weapon;
+        currentWeapon.gameObject.EnsureActive(true);
     }
 
     public override void UpdateFireInput(bool leftInput, bool rightInput)
     {
         //bang
-
-        // ropeProjectileWeapon.UpdateWeapon(PlayerDT, leftInput, rightInput);
-
-        // gravitationGauntletWeapon.UpdateWeapon(PlayerDT, leftInput, rightInput);
-
-        zeroSwordWeapon.UpdateWeapon(PlayerDT, leftInput, rightInput);
-
+        currentWeapon.UpdateWeapon(PlayerDT, leftInput, rightInput);
     }
+
+    public override void UpdatePrevNextInput(bool prev, bool next)
+    {
+        if (prev)
+        {
+            switch (currentWeapon)
+            {
+                default:
+                case PlayerWeaponZeroSword: SetCurrentWeapon(gravitationGauntletWeapon); break;
+                case PlayerWeaponGravitationGauntlet: SetCurrentWeapon(ropeProjectileWeapon); break;
+                case PlayerWeaponRopeProjectile: SetCurrentWeapon(zeroSwordWeapon); break;
+            }
+        }
+        else if(next)
+        {
+            switch (currentWeapon)
+            {
+                default:
+                case PlayerWeaponZeroSword: SetCurrentWeapon(ropeProjectileWeapon); break;
+                case PlayerWeaponGravitationGauntlet: SetCurrentWeapon(zeroSwordWeapon); break;
+                case PlayerWeaponRopeProjectile: SetCurrentWeapon(gravitationGauntletWeapon); break;
+            }
+        }
+    }
+
 }

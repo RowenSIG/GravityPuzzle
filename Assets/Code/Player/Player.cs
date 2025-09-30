@@ -71,6 +71,9 @@ public class Player : MonoBehaviour
         bool fire = input.FireAction.IsPressed();
         bool altFire = input.AltFireAction.IsPressed();
 
+        bool previousWeapon = input.PrevWeaponAction.WasPressedThisFrame();
+        bool nextWeapon = input.NextWeaponAction.WasPressedThisFrame();
+
         // Log($"[Player] Update move[{move}] look[{look}] jump[{jump}] fire[{fire}]");
 
         foreach (var control in allControls)
@@ -78,6 +81,7 @@ public class Player : MonoBehaviour
             control.UpdateLookInput(look);
             control.UpdateMoveInput(move, jump);
             control.UpdateFireInput(fire, altFire);
+            control.UpdatePrevNextInput(previousWeapon, nextWeapon);
         }
     }
 
