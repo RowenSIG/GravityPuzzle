@@ -6,6 +6,14 @@ using static Logging;
 
 public class PlayerWeaponZeroSword : PlayerWeapon
 {
+    public enum eSwipeDirection
+    {
+        INVALID = -1,
+
+        RIGHT_TO_LEFT = 10,
+        LEFT_TO_RIGHT = 20,
+    }
+
     [SerializeField]
     private float weaponRange;
     [SerializeField]
@@ -14,6 +22,8 @@ public class PlayerWeaponZeroSword : PlayerWeapon
     private float arcTime;
     [SerializeField]
     private Vector3 arcAxis;
+    [SerializeField]
+    private float arcThickness;
 
     [SerializeField]
     private float strikeForce;
@@ -23,6 +33,8 @@ public class PlayerWeaponZeroSword : PlayerWeapon
 
     private float reloadTimer = 0f;
     private bool canFire = true;
+
+    private eSwipeDirection nextSwipeDirection = eSwipeDirection.RIGHT_TO_LEFT;
 
     private bool CanFire
     {
@@ -87,10 +99,24 @@ public class PlayerWeaponZeroSword : PlayerWeapon
 
             var origin = player.PlayerCamera.transform.position;
             var cameraForward = player.PlayerCamera.transform.forward;
-            var arcUp = transform.TransformDirection(arcAxis);
+            var arcUp = Vector3.zero;
+
+            switch (nextSwipeDirection)
+            {
+                case eSwipeDirection.LEFT_TO_RIGHT:
+                    arcUp = transform.TransformDirection(arcAxis);
+                    break;
+                case eSwipeDirection.RIGHT_TO_LEFT:
+                    angleDelta = -angleDelta; //actually it needs to be negative to  go right to left.
+                    var invArcAxis = arcAxis;
+                    invArcAxis.x = -invArcAxis.x;
+                    arcUp = transform.TransformDirection(invArcAxis);
+                    break;
+            }
+
             var capsuleAxis = Quaternion.AngleAxis((float)angleDelta, arcUp) * cameraForward;
 
-            var radius = 0.1f;
+            var radius = arcThickness;
 
             var capsuleOriginA = origin + capsuleAxis.normalized * radius;
             var capsuleOriginB = origin + capsuleAxis.normalized * (weaponRange - radius);
@@ -148,6 +174,13 @@ public class PlayerWeaponZeroSword : PlayerWeapon
         }
 
         alreadyHitColliders.Clear();
+
+        switch (nextSwipeDirection)
+        {
+            default:
+            case eSwipeDirection.LEFT_TO_RIGHT: nextSwipeDirection = eSwipeDirection.RIGHT_TO_LEFT; break;
+            case eSwipeDirection.RIGHT_TO_LEFT : nextSwipeDirection = eSwipeDirection.LEFT_TO_RIGHT; break;
+        }
     }
 
     private List<Vector3> capsA = new List<Vector3>();
@@ -161,11 +194,20 @@ public class PlayerWeaponZeroSword : PlayerWeapon
 
         if (capsA != null && capsB != null)
         {
+            Vector3? prevEnd = null;
             for (int i = 0; i < capsA.Count; i++)
             {
                 var start = capsA[i];
                 var end = capsB[i];
                 Gizmos.DrawLine(start, end);
+
+                Gizmos.DrawLine(end, end + (end - start).normalized * arcThickness);
+
+                if (prevEnd.HasValue)
+                {
+                    Gizmos.DrawLine(end, prevEnd.Value);
+                }
+                prevEnd = end;
             }
         }
         if (hitpoints != null)

@@ -261,6 +261,7 @@ MonoBehaviour:
   arcAngle: 140
   arcTime: 0.1
   arcAxis: {x: 0.5, y: 1, z: 0}
+  arcThickness: 0.05
   strikeForce: 5
   reloadTime: 1
 --- !u!1 &798748348927436189

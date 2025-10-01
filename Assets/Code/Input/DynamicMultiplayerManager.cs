@@ -56,13 +56,13 @@ public class DynamicMultiplayerManager : MonoBehaviour
 
     void DetectExistingGamepads()
     {
-        foreach (var gamepad in Gamepad.all)
-        {
-            if (deviceToPlayer.ContainsKey(gamepad) == false)
-            {
-                AddNewPlayer( new InputDevice[] { gamepad });
-            }
-        }
+        // foreach (var gamepad in Gamepad.all)
+        // {
+        //     if (deviceToPlayer.ContainsKey(gamepad) == false)
+        //     {
+        //         AddNewPlayer( new InputDevice[] { gamepad });
+        //     }
+        // }
     }
 
 
