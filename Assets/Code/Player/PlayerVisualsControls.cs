@@ -23,10 +23,10 @@ public class PlayerVisualsControls : PlayerComponentControls
     {
         float x = input.x;
         //jitter!?
-        if (Mathf.Abs(x) < 1)
-        {
-            x = 0;
-        }
+        // if (Mathf.Abs(x) < 1)
+        // {
+        //     x = 0;
+        // }
 
         var up = PlayerUp;
         var rotX = Quaternion.AngleAxis(x * config.horizontalTurnSpeed, up);

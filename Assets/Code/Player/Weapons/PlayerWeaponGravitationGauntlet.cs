@@ -91,6 +91,8 @@ public class PlayerWeaponGravitationGauntlet : PlayerWeapon
     {
         //we're gonna resolve our direction onto a principle axis.
         var directionalGravity = grabBody.gameObject.GetComponent<DirectionalGravity>();
+        if(directionalGravity == null)
+            return;
 
         var directionDelta = currentGrabPos - grabHitPos;
 

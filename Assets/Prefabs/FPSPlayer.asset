@@ -14,10 +14,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::PlayerConfiguration
   horizontalTurnSpeed: 0.5
   verticalLookSpeed: 0.2
-  forwardMoveSpeed: 10
-  backwardMoveSpeed: 10
-  sidewaysMoveSpeed: 10
-  forwardSwingSpeed: 12
+  forwardMoveSpeed: 25
+  backwardMoveSpeed: 25
+  sidewaysMoveSpeed: 25
+  forwardSwingSpeed: 25
   backwardSwingSpeed: 12
   sidewaysSwingSpeed: 12
   jumpForce: 6

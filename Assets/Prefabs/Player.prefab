@@ -1733,7 +1733,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerGrabControls
   grabDistance: 2
-  forceStrength: 2
+  forceStrength: 0.5
+  torqueStrength: 0.4
 --- !u!1 &2464111431400334432
 GameObject:
   m_ObjectHideFlags: 0
