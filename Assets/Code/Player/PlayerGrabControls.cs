@@ -1,8 +1,8 @@
-using Unity.Mathematics;
 using UnityEngine;
 
 public class PlayerGrabControls : PlayerComponentControls
 {
+    private DelayedGravity delayedGravity;
 
     private float crosshairwidth = 20;
     private float crosshairheight = 20;
@@ -10,6 +10,9 @@ public class PlayerGrabControls : PlayerComponentControls
     public float grabDistance = 10f;
     public float forceStrength = 10f;
     public float torqueStrength = 1f;
+
+    public float bodyMoveSpeedThresholdForDelayedGravity = 1f;
+    public float bodyDelayedGravityDelay = 3f;
 
     private class GrabState
     {
@@ -20,6 +23,12 @@ public class PlayerGrabControls : PlayerComponentControls
         public bool bodyUseGravity;
     }
     private GrabState grab = null;
+
+    public override void Setup(PlayerConfiguration config, Player player)
+    {
+        base.Setup(config, player);
+        delayedGravity = GetComponent<DelayedGravity>();
+    }
 
     public override void UpdateFireInput(bool leftFire, bool rightFire)
     {
@@ -42,12 +51,25 @@ public class PlayerGrabControls : PlayerComponentControls
                     if(body != null)
                     {
                         grab.bodyMass = body.mass;
-                        grab.bodyUseGravity = body.useGravity;
 
                         body.linearDamping = 10f;
                         body.angularDamping = 10f;
-                        body.useGravity = false;
                         body.mass = 1f;
+
+                        if(body.GetComponent<DirectionalGravity>() is var dirgrav && dirgrav != null)
+                        {
+                            delayedGravity.CancelGravityDelay(grab.body);
+
+                            grab.bodyUseGravity = dirgrav.GravityActive;
+                            dirgrav.SetGravityActive(false);
+                        }
+                        else
+                        {
+                            delayedGravity.CancelGravityDelay(grab.body);
+
+                            grab.bodyUseGravity = body.useGravity;
+                            body.useGravity = false;
+                        }
 
                     }
                 }
@@ -57,20 +79,26 @@ public class PlayerGrabControls : PlayerComponentControls
         {
             if (leftFire == false)
             {
-                if (grab != null && grab.body != null)
-                {
-                    grab.body.linearDamping = 0.1f;
-                    grab.body.angularDamping = 0.1f;
-                    
-                    grab.body.mass = grab.bodyMass;
-                    grab.body.useGravity = grab.bodyUseGravity;
-                }
+                //release our object:
+                ReleaseGrabbedObject();
                 grab = null;
             }
-
-           
         }
+    }
 
+    private void ReleaseGrabbedObject()
+    {
+        if (grab != null && grab.body != null)
+        {
+            if(grab.body.linearVelocity.magnitude < bodyMoveSpeedThresholdForDelayedGravity)
+            {
+                delayedGravity.RestoreGravityWithDelay(grab.body, mass: grab.bodyMass, active: grab.bodyUseGravity, delay: bodyDelayedGravityDelay, restoreDamping: true);
+            }
+            else
+            {
+                delayedGravity.RestoreGravityInstantly(grab.body, mass: grab.bodyMass, active: grab.bodyUseGravity, restoreDamping: true);
+            }
+        }
     }
 
     public override void UpdateFixedPhysics()

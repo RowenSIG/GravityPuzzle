@@ -11,6 +11,9 @@ public class PlayerWeaponControls : PlayerComponentControls
     [SerializeField]
     private PlayerWeaponZeroSword zeroSwordWeapon;
 
+    [SerializeField]
+    private PlayerWeaponStickyFoam stickyFoamWeapon;
+
     private PlayerWeapon currentWeapon;
 
     public override void Setup(PlayerConfiguration config, Player player)
@@ -20,6 +23,7 @@ public class PlayerWeaponControls : PlayerComponentControls
         ropeProjectileWeapon.Setup(player);
         gravitationGauntletWeapon.Setup(player);
         zeroSwordWeapon.Setup(player);
+        stickyFoamWeapon.Setup(player);
 
         SetCurrentWeapon(gravitationGauntletWeapon);
     }
@@ -29,6 +33,7 @@ public class PlayerWeaponControls : PlayerComponentControls
         ropeProjectileWeapon.gameObject.EnsureActive(false);
         gravitationGauntletWeapon.gameObject.EnsureActive(false);
         zeroSwordWeapon.gameObject.EnsureActive(false);
+        stickyFoamWeapon.gameObject.EnsureActive(false);
 
         currentWeapon = weapon;
         currentWeapon.gameObject.EnsureActive(true);
@@ -54,7 +59,8 @@ public class PlayerWeaponControls : PlayerComponentControls
                     default:
                     case PlayerWeaponZeroSword: SetCurrentWeapon(gravitationGauntletWeapon); break;
                     case PlayerWeaponGravitationGauntlet: SetCurrentWeapon(ropeProjectileWeapon); break;
-                    case PlayerWeaponRopeProjectile: SetCurrentWeapon(zeroSwordWeapon); break;
+                    case PlayerWeaponRopeProjectile: SetCurrentWeapon(stickyFoamWeapon); break;
+                    case PlayerWeaponStickyFoam: SetCurrentWeapon(zeroSwordWeapon); break;
                 }
             }
             else if (next)
@@ -62,9 +68,10 @@ public class PlayerWeaponControls : PlayerComponentControls
                 switch (currentWeapon)
                 {
                     default:
-                    case PlayerWeaponZeroSword: SetCurrentWeapon(ropeProjectileWeapon); break;
+                    case PlayerWeaponZeroSword: SetCurrentWeapon(stickyFoamWeapon); break;
                     case PlayerWeaponGravitationGauntlet: SetCurrentWeapon(zeroSwordWeapon); break;
                     case PlayerWeaponRopeProjectile: SetCurrentWeapon(gravitationGauntletWeapon); break;
+                    case PlayerWeaponStickyFoam: SetCurrentWeapon(ropeProjectileWeapon); break;
                 }
             }
     }

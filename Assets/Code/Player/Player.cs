@@ -29,7 +29,10 @@ public class Player : MonoBehaviour
 
     [SerializeField]
     private Rigidbody body;
+    [SerializeField]
+    private Collider ourCollider;
     public Rigidbody Body => body;
+    public Collider Collider => ourCollider;
 
     private PlayerConfiguration config;
 

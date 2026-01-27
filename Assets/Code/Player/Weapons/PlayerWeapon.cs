@@ -8,9 +8,6 @@ public abstract class PlayerWeapon : MonoBehaviour
         this.player = player;
     }
 
-    public virtual void UpdateWeapon(float deltaTime, bool leftFire, bool rightFire)
-    {
-
-    }
+    public abstract void UpdateWeapon(float deltaTime, bool leftFire, bool rightFire);
 }
 

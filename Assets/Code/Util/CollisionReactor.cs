@@ -8,6 +8,10 @@ public class CollisionReactor : MonoBehaviour
     public Action<Collision> OnOnCollisionExit = (p) => { };
     public Action<Collision> OnOnCollisionStay = (p) => { };
 
+    public Action<Collider> OnOnTriggerEnter = (p) => { };
+    public Action<Collider> OnOnTriggerExit = (p) => { };
+    public Action<Collider> OnOnTriggerStay = (p) => { };
+
     void OnCollisionEnter(Collision collision)
     {
         OnOnCollisionEnter.Invoke(collision);
@@ -20,4 +24,19 @@ public class CollisionReactor : MonoBehaviour
     {
         OnOnCollisionStay.Invoke(collision);
     }
+
+    void OnTriggerEnter(Collider other)
+    {
+        OnOnTriggerEnter.Invoke(other);   
+    }
+    void OnTriggerExit(Collider other)
+    {
+        OnOnTriggerExit.Invoke(other);   
+    }
+    void OnTriggerStay(Collider other)
+    {
+        OnOnTriggerStay.Invoke(other);   
+    }
+
+    public Action OnZeroSwordHit = () => {};
 }

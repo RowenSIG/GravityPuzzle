@@ -165,6 +165,12 @@ public class PlayerWeaponZeroSword : PlayerWeapon
                             }
                         }
                     }
+
+                    var collisionReactor = coll.gameObject.GetComponent<CollisionReactor>();
+                    if(collisionReactor != null)
+                    {
+                        collisionReactor.OnZeroSwordHit();
+                    }
                 }
             }
 

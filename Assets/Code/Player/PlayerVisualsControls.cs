@@ -3,8 +3,6 @@ using static Logging;
 
 public class PlayerVisualsControls : PlayerComponentControls
 {
-    [SerializeField]
-    private Rigidbody rigidBody;
 
     [SerializeField]
     private Transform camLookTransform;
@@ -53,14 +51,14 @@ public class PlayerVisualsControls : PlayerComponentControls
             Vector3 projectedForwardX = Vector3.ProjectOnPlane(transform.forward + transform.up * 2f, up).normalized;
 
             transform.rotation = Quaternion.LookRotation(projectedForwardX, up);
-            rigidBody.rotation = transform.rotation;
+            player.Body.rotation = transform.rotation;
             return;
         }
 
         Vector3 projectedForward = Vector3.ProjectOnPlane(transform.forward, up).normalized;
 
         transform.rotation = Quaternion.LookRotation(projectedForward, up);
-        rigidBody.rotation = transform.rotation;
+        player.Body.rotation = transform.rotation;
 
 
     }
@@ -86,7 +84,7 @@ public class PlayerVisualsControls : PlayerComponentControls
 
             Vector3 projectedForward = Vector3.ProjectOnPlane(camLookTransform.forward + camLookTransform.up * 2f, PlayerUp).normalized;
             transform.rotation = Quaternion.LookRotation(projectedForward, PlayerUp);
-            rigidBody.rotation = transform.rotation;
+            player.Body.rotation = transform.rotation;
         }
     }
 

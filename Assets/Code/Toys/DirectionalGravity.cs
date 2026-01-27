@@ -6,6 +6,7 @@ public class DirectionalGravity : MonoBehaviour
 {
     [SerializeField]
     private Rigidbody body;
+    public Rigidbody Body => body;
 
     [SerializeField]
     private Vector3 gravityDirection;
@@ -13,6 +14,8 @@ public class DirectionalGravity : MonoBehaviour
 
     [SerializeField]
     private bool assignGravityOnAwake;
+    private bool gravityActive = true;
+    public bool GravityActive => gravityActive;
 
     private void Awake()
     {
@@ -42,11 +45,17 @@ public class DirectionalGravity : MonoBehaviour
         }
     }
 
+    public void SetGravityActive(bool active)
+    {
+        this.gravityActive = active;
+    }
+
     private void FixedUpdate()
     {
-        if ( body != null )
+        if ( body != null && gravityActive )
         {
             body.AddForce(gravityDirection * Game.GRAVITY_ACCELERATION * Time.fixedDeltaTime, ForceMode.VelocityChange);
         }
     }
+
 }
