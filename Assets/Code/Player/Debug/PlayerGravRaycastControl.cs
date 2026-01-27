@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
 using static Logging;
 
@@ -10,6 +9,9 @@ public class PlayerGravRaycastControl : PlayerComponentControls
 
     [SerializeField]
     private CollisionReactor collisionReactor;
+
+    [SerializeField]
+    private bool normalGravity = false;
 
 #if DO_RAYCASTS
     private bool firing = false;
@@ -77,6 +79,10 @@ public class PlayerGravRaycastControl : PlayerComponentControls
         contacts.AddRange(collision.contacts);
     
         var up = collision.contacts[0].normal;
+
+        if(normalGravity)
+            up = Vector3.up;
+            
         player.SetNewPlayerUp(up);
         return;
     }
