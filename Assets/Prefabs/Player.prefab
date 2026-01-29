@@ -226,8 +226,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerWeaponBoxCutter
   boxCenterTransform: {fileID: 1353075241068098058}
-  width: 0.5
-  height: 0.5
+  width: 1
+  height: 0.66
   depth: 3
 --- !u!1 &655829372726506928
 GameObject:
@@ -380,7 +380,7 @@ MonoBehaviour:
   stickyFoamPrefab: {fileID: 6697114119976246281, guid: dc3af28095b3ed5459ba17e5ddf901be, type: 3}
   foamSpawnPoint: {fileID: 3447994895148549552}
   foamsPerMagazine: 8
-  repeatTime: 0.2
+  repeatTime: 0.3
   reloadTime: 2
 --- !u!1 &798748348927436189
 GameObject:

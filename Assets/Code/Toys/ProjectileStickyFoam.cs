@@ -37,6 +37,7 @@ public class ProjectileStickyFoam : MonoBehaviour
     private float timeOfFirstHit = 0f;
 
     private Vector3 direction;
+    private Collider ignoreWhileFlyingCollider = null;
 
     private void Awake()
     {
@@ -51,7 +52,8 @@ public class ProjectileStickyFoam : MonoBehaviour
 
     public void Shoot(Vector3 direction, Collider ignoreCollider)
     {
-        Physics.IgnoreCollision(ourCollider, ignoreCollider);
+        ignoreWhileFlyingCollider = ignoreCollider;
+        Physics.IgnoreCollision(ourCollider, ignoreWhileFlyingCollider);
         this.direction = direction;
     }
 
@@ -133,6 +135,9 @@ public class ProjectileStickyFoam : MonoBehaviour
 
         foreach(var otherCollider in otherHitColliders)
         {
+            if(otherCollider.attachedRigidbody == body)
+                continue;
+                
             var origin = otherCollider.transform.InverseTransformPoint(worldOrigin);
             var axis = otherCollider.transform.InverseTransformDirection(worldAxis);
 
@@ -165,7 +170,74 @@ public class ProjectileStickyFoam : MonoBehaviour
     private void Harden()
     {
         //become a non trigger!?
+
+        //what if we're sticking to other sticky foam?
+
+        Physics.IgnoreCollision(ourCollider, ignoreWhileFlyingCollider, false);
+
+
+        //we could sub parent, remove our own rb
+        var tempJoints = new List<FixedJoint>(joints);
+
+        foreach(var otherCollider in otherHitColliders)
+        {
+            var stickyFoam = otherCollider.GetComponentInParent<ProjectileStickyFoam>();
+            if(stickyFoam)
+            {
+                var otherbody = otherCollider.attachedRigidbody;
+                
+                //ahha. ok...
+                transform.SetParent(otherCollider.transform);
+                
+                //uh oh. can't remove body cos of the fixed joint...
+                foreach(var joint in tempJoints)
+                {
+                    if(joint == null) //just shows as an error...
+                        continue; 
+                    if(joint.connectedBody == otherbody)
+                    {
+                        Destroy(joint);
+                        joints.Remove(joint);
+                    }
+                    else
+                    {
+                        //we have to transfer them over...
+                        TransferJointFromUsToTargetBody(joint, otherCollider, otherbody, stickyFoam);
+                        Destroy(joint);
+                        joints.Remove(joint);
+                    }
+                }
+
+                Destroy(body);
+                break;
+                //i wonder if we'll have to do something clever here to rebuild the physics?
+            }
+        }
+
         ourCollider.isTrigger = false;
+    }
+
+    private void TransferJointFromUsToTargetBody(FixedJoint joint, Collider collider, Rigidbody owner, ProjectileStickyFoam stickyFoam)
+    {
+        var newJoint = owner.gameObject.AddComponent<FixedJoint>();
+        newJoint.connectedBody = joint.connectedBody;
+        newJoint.breakForce = joint.breakForce;
+        newJoint.breakTorque = joint.breakTorque;
+        newJoint.enableCollision = joint.enableCollision;
+        newJoint.enablePreprocessing = joint.enablePreprocessing;
+        newJoint.massScale = joint.massScale;
+        newJoint.connectedMassScale = joint.connectedMassScale;
+        newJoint.anchor = joint.anchor;
+        newJoint.axis = joint.axis.normalized;
+        stickyFoam.AddedJoint(collider, newJoint);
+    }
+
+    private void AddedJoint(Collider collider, FixedJoint joint)
+    {
+        if(otherHitColliders.Contains(collider) == false)
+            otherHitColliders.Add(collider);
+        
+        joints.Add(joint);
     }
 
     public void Remove()

@@ -184,7 +184,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8c88dd5c7e94733449c660324d3ac762, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ProjectileStickyFoam
-  projectileFlySpeed: 4
+  projectileFlySpeed: 5
   projectileSettleSpeed: 0.15
   projectileSettleGrow: 0.25
   postFirstHitContinuation: 1

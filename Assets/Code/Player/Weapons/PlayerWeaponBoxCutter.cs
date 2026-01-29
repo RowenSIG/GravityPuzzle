@@ -20,6 +20,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
         public ePlane plane;
 
+        public Plane unityPlane;
+
         public Vector3 localCutPos0;
         public Vector3 localCutPos1;
 
@@ -168,7 +170,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                 {
                     if(intersectionPointBuffer.Count != 2)
                     {
-                        Log($"intersectionCount not 2 [{intersectionPointBuffer.Count}]");
+                       // Log($"intersectionCount not 2 [{intersectionPointBuffer.Count}]");
+                       continue;
                     }
                     foreach(var localIntersectionPoint in intersectionPointBuffer)
                     {
@@ -185,6 +188,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                     triCut.tri1 = tri1;
                     triCut.tri2 = tri2;
                     triCut.plane = plane;
+                    triCut.unityPlane = new Plane(point0, point1, point2);
 
                     triCut.localCutPos0 = intersectionPointBuffer[0];
                     if(intersectionPointBuffer.Count == 2)
@@ -265,9 +269,44 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             if(triCut.pointCount != 2)
                 continue;
 
+            //regardless, we remove the old tri
+            triIndicesRemoved.Add(triCut.triIndex0);
+            triIndicesRemoved.Add(triCut.triIndex1);
+            triIndicesRemoved.Add(triCut.triIndex2);
+
+            triBuffer[triCut.triIndex0] = 0;
+            triBuffer[triCut.triIndex1] = 0;
+            triBuffer[triCut.triIndex2] = 0;
+
+
             var point0 = vertsBuffer[triCut.tri0];
             var point1 = vertsBuffer[triCut.tri1];
             var point2 = vertsBuffer[triCut.tri2];
+
+            var worldPoint0 = localToWorldMatrix.MultiplyPoint3x4(point0);
+            var worldPoint1 = localToWorldMatrix.MultiplyPoint3x4(point1);
+            var worldPoint2 = localToWorldMatrix.MultiplyPoint3x4(point2);
+            var point0InsideBounds = LocalBoundsContains(worldPoint0);
+            var point1InsideBounds = LocalBoundsContains(worldPoint1);
+            var point2InsideBounds = LocalBoundsContains(worldPoint2);
+            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, triCut.plane);
+            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, triCut.plane);
+            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, triCut.plane);
+            
+            Log($"Plane [{triCut.plane}] vert check: 0[{point0OnCutSideOfPlane}] 1[{point1OnCutSideOfPlane}] 2[{point2OnCutSideOfPlane}]");
+
+            int numInsideBounds = 0;
+            if(point0InsideBounds) numInsideBounds ++;
+            if(point1InsideBounds) numInsideBounds ++;
+            if(point2InsideBounds) numInsideBounds ++;
+            
+            Log($"Plane [{triCut.plane}] numInsidebounds[{numInsideBounds}]");
+
+            if(numInsideBounds == 3)
+            {
+                //all 3 verts inside cut bounds - just destroy the thing!
+                continue;
+            }
 
             //we're adding 2 new verts
             int newTri0 = vertsBuffer.Count;
@@ -278,93 +317,70 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             newTrisAdded.Add(newTri0);
             newTrisAdded.Add(newTri1);
 
-            //we are going to LEAVE our other vert in the mesh. 
-            
-            var worldPoint0 = localToWorldMatrix.MultiplyPoint3x4(point0);
-            var point0InsideBounds = LocalBoundsContains(worldPoint0);
-            var worldPoint1 = localToWorldMatrix.MultiplyPoint3x4(point1);
-            var point1InsideBounds = LocalBoundsContains(worldPoint1);
-            var worldPoint2 = localToWorldMatrix.MultiplyPoint3x4(point2);
-            var point2InsideBounds = LocalBoundsContains(worldPoint2);
-
-            int numInside = 0;
-            if(point0InsideBounds)
-                numInside += 1;
-            if(point1InsideBounds)
-                numInside += 1;
-            if(point2InsideBounds)
-                numInside += 1;
-
-
-            //there are 4 possible scenarios:
-
-            //1. we are cutting a point off our tri
-            // - 1 point is inside our bounds and 2 outside
-            if(numInside == 1)
+            if(numInsideBounds == 1)
             {
-                Log("One inside");
+                //it's a bit tricky, so:
 
-                //there's a non zero chance our vert cut positions are in a good order.
+                //create a tri with the first vert we have on the non-cut side of our plane:
+                var triOnSafeSide = 0;
 
-                //1 - we eliminate our original tri:
-                triIndicesRemoved.Add(triCut.triIndex0);
-                triIndicesRemoved.Add(triCut.triIndex1);
-                triIndicesRemoved.Add(triCut.triIndex2);
+                if(point0OnCutSideOfPlane == false)
+                    triOnSafeSide = triCut.tri0;
+                else if(point1OnCutSideOfPlane == false)
+                    triOnSafeSide = triCut.tri1;
+                else if(point2OnCutSideOfPlane == false)
+                    triOnSafeSide = triCut.tri2;
 
-                triBuffer[triCut.triIndex0] = 0;
-                triBuffer[triCut.triIndex1] = 0;
-                triBuffer[triCut.triIndex2] = 0;
+                //frustratingly, i  can't guarantee winding here.
+                CaptureMatchedWindingPlane(newTri0, newTri1, triOnSafeSide, triCut.unityPlane);
 
-
+                //and then one with our non-cut tris
                 var survivingTri0 = 0;
                 var survivingTri1 = 0;
+
                 if(point0InsideBounds)
                 {
-                    Log("0 inside");
                     survivingTri0 = triCut.tri1;
                     survivingTri1 = triCut.tri2;
                 }
                 else if(point1InsideBounds)
                 {
-                    Log("1 inside");
-
-                    survivingTri0 = triCut.tri0;
-                    survivingTri1 = triCut.tri1;
+                    survivingTri0 = triCut.tri2;
+                    survivingTri1 = triCut.tri0;
                 }
                 else if(point2InsideBounds)
                 {
-                    Log("2 inside");
-
                     survivingTri0 = triCut.tri0;
                     survivingTri1 = triCut.tri1;
                 }
 
+                var chosenTriToFormSurvivingFace = newTri0;
+                switch(triCut.plane)
+                {
+                    case ePlane.TOP: chosenTriToFormSurvivingFace = newTri0; break;
+                    case ePlane.RIGHT: chosenTriToFormSurvivingFace = newTri0; break;
+                    case ePlane.BOTTOM: chosenTriToFormSurvivingFace = newTri1; break;
+                    case ePlane.LEFT: chosenTriToFormSurvivingFace = newTri1; break;
+                }
+                CaptureMatchedWindingPlane(survivingTri0, survivingTri1, chosenTriToFormSurvivingFace, triCut.unityPlane);
+            }
+            else if(numInsideBounds == 2)
+            {
+                var survivingTri0 = 0;
+                if(point0InsideBounds == false)
+                    survivingTri0 = triCut.tri0;
+                else if(point1InsideBounds == false)
+                    survivingTri0 = triCut.tri1;
+                else if(point2InsideBounds == false)
+                    survivingTri0 = triCut.tri2;
+                
                 triBuffer.Add(newTri0);
                 triBuffer.Add(newTri1);
-                triBuffer.Add(survivingTri1);
-
                 triBuffer.Add(survivingTri0);
-                triBuffer.Add(survivingTri1);
-                triBuffer.Add(newTri1);
             }
-
-            //2. we are cutting the base off our tri:
-            // - 2 points are inside our bounds, 1 is outside
-            else if(numInside == 2)
+            else if(numInsideBounds == 0)
             {
-                Log("Two inside");   
-            }
-
-            else if(numInside == 0)
-            {
-                //3. we are cutting into our tri:
-                // - all points are outside but we have cut an edge
-                // - and our bounds is not completely contained by the tri
-                Log("Zero inside");
-            
-                //4. we are cutting a hole in our tri:
-                // - all the points are ouside
-                // - and our bounds IS completely contained by the tri
+                //this is a tricky scene, 
             }
         }
 
@@ -422,6 +438,47 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         var localVert = transform.InverseTransformPoint(worldVert);
         return localBoxBounds.Contains(localVert);
     }
+
+
+    private bool VertPositionedOnCutSideOfPlane(Vector3 worldVert, ePlane plane)
+    {
+
+        //we need to get our plane 'normal' and get the dot against the localVert 
+        var planeVerts = GetPlane(plane);
+        var myPlane = new Plane(planeVerts.backA, planeVerts.frontA, planeVerts.frontB);
+
+        switch(plane)
+        {
+            default:
+            case ePlane.TOP: return myPlane.GetSide(worldVert) == false;
+            case ePlane.RIGHT: return myPlane.GetSide(worldVert) == false ;
+
+            case ePlane.BOTTOM: return myPlane.GetSide(worldVert);
+            case ePlane.LEFT: return myPlane.GetSide(worldVert);
+        }
+    }
+
+    private void CaptureMatchedWindingPlane(int tri0, int tri1, int tri2, Plane referencePlane)
+    {
+        var vert0 = vertsBuffer[tri0];
+        var vert1 = vertsBuffer[tri1];
+        var vert2 = vertsBuffer[tri2];
+        var testPlane = new Plane(vert0, vert1, vert2);
+
+        if(Vector3.Dot(testPlane.normal, referencePlane.normal) > 0)
+        {
+            triBuffer.Add(tri0);
+            triBuffer.Add(tri1);
+            triBuffer.Add(tri2);
+        }
+        else
+        {
+            triBuffer.Add(tri0);
+            triBuffer.Add(tri2);
+            triBuffer.Add(tri1);
+        }
+    }
+
 
     private void Log(string log)
     {
