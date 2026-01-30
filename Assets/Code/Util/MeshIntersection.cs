@@ -14,20 +14,21 @@ public static class MeshIntersection
     /// </summary>
     public static void GetTrianglePlaneIntersection( List<Vector3> outPoints, 
         Vector3 triV0, Vector3 triV1, Vector3 triV2, // Mesh Face
-        Vector3 planeV0, Vector3 planeV1, Vector3 planeV2, Vector3 planeV3) // Finite Quad Plane
+        Vector3 planeV0, Vector3 planeV1, Vector3 planeV2, Vector3 planeV3,
+        out int triEdgeIntersectionCount) // Finite Quad Plane
     {
         outPoints.Clear();
 
-        // 1. Check each tri edge against the plane
-        CheckEdgeAgainstFace(triV0, triV1, planeV0, planeV1, planeV2, planeV3, outPoints);
-        CheckEdgeAgainstFace(triV1, triV2, planeV0, planeV1, planeV2, planeV3, outPoints);
-        CheckEdgeAgainstFace(triV2, triV0, planeV0, planeV1, planeV2, planeV3, outPoints);
-
-        // 2. check each plane edge against the tri
         CheckEdgeAgainstFace(planeV0, planeV1, triV0, triV1, triV2, outPoints);
         CheckEdgeAgainstFace(planeV1, planeV2, triV0, triV1, triV2, outPoints);
         CheckEdgeAgainstFace(planeV2, planeV3, triV0, triV1, triV2, outPoints);
         CheckEdgeAgainstFace(planeV3, planeV0, triV0, triV1, triV2, outPoints);
+
+        triEdgeIntersectionCount = outPoints.Count;
+        
+        CheckEdgeAgainstFace(triV0, triV1, planeV0, planeV1, planeV2, planeV3, outPoints);
+        CheckEdgeAgainstFace(triV1, triV2, planeV0, planeV1, planeV2, planeV3, outPoints);
+        CheckEdgeAgainstFace(triV2, triV0, planeV0, planeV1, planeV2, planeV3, outPoints);
 
     }
 
@@ -82,4 +83,41 @@ public static class MeshIntersection
         point = origin + dir * t;
         return true;
     }
+
+    public static void GetCutVertsInCorrectOrder(Vector3 cutVert0
+                                                , Vector3 cutVert1
+                                                , Vector3 triVert0
+                                                , Vector3 triVert1
+                                                , Vector3 triVert2
+                                                , out Vector3 sortedPoint0
+                                                , out Vector3 sortedPoint1 )
+    {
+        var centroid = Vector3.zero;
+        centroid += triVert0;
+        centroid += triVert1;
+        centroid += triVert2;
+        centroid /= 3f;
+
+        var dirVector = centroid - triVert0;
+        var cutVertDir0 = centroid - cutVert0;
+        var cutVertDir1 = centroid - cutVert1;
+
+        var plane = new Plane(triVert0, triVert1, triVert2);
+        var normal = plane.normal;
+
+        float angle0 = Vector3.SignedAngle(dirVector, cutVertDir0, normal);
+        float angle1 = Vector3.Angle(dirVector, cutVertDir1);
+
+        if(angle1 > angle0)
+        {
+            sortedPoint0 = cutVert0;
+            sortedPoint1 = cutVert1;
+        }
+        else
+        {
+            sortedPoint0 = cutVert1;
+            sortedPoint1 = cutVert0;
+        }
+    }
 }
+

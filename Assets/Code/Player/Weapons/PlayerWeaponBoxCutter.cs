@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Mono.Cecil;
 using UnityEngine;
 
 public class PlayerWeaponBoxCutter : PlayerWeapon
@@ -126,10 +127,13 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         var meshLocalMatrix = meshFilter.transform.localToWorldMatrix;
         var mesh = meshFilter.mesh;
 
+        vertsBuffer.Clear();
+        triBuffer.Clear();
+
         CastPlaneAgainstMesh(ePlane.TOP, mesh, meshWorldMatrix, meshLocalMatrix);
-        CastPlaneAgainstMesh(ePlane.BOTTOM, mesh, meshWorldMatrix, meshLocalMatrix);
-        CastPlaneAgainstMesh(ePlane.LEFT, mesh, meshWorldMatrix, meshLocalMatrix);
-        CastPlaneAgainstMesh(ePlane.RIGHT, mesh, meshWorldMatrix, meshLocalMatrix);
+        // CastPlaneAgainstMesh(ePlane.BOTTOM, mesh, meshWorldMatrix, meshLocalMatrix);
+        // CastPlaneAgainstMesh(ePlane.LEFT, mesh, meshWorldMatrix, meshLocalMatrix);
+        // CastPlaneAgainstMesh(ePlane.RIGHT, mesh, meshWorldMatrix, meshLocalMatrix);
     }
 
     private void CastPlaneAgainstMesh(ePlane plane, Mesh mesh, Matrix4x4 meshWorldMatrix, Matrix4x4 meshLocalMatrix)
@@ -164,7 +168,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
                 MeshIntersection.GetTrianglePlaneIntersection(intersectionPointBuffer,
                 point0, point1, point2,
-                localBackA, localBackb, localFrontB, localFrontA);
+                localBackA, localBackb, localFrontB, localFrontA,
+                out int triEdgeIntersectionCount);
 
                 if (intersectionPointBuffer.Count > 0)
                 {
@@ -190,12 +195,20 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                     triCut.plane = plane;
                     triCut.unityPlane = new Plane(point0, point1, point2);
 
-                    triCut.localCutPos0 = intersectionPointBuffer[0];
-                    if(intersectionPointBuffer.Count == 2)
-                    {
-                        triCut.localCutPos1 = intersectionPointBuffer[1];
-                    }
-                    triCut.pointCount = intersectionPointBuffer.Count;
+                    triCut.pointCount = 2;
+                    
+                    MeshIntersection.GetCutVertsInCorrectOrder(intersectionPointBuffer[0],
+                    intersectionPointBuffer[1],
+                    point0,
+                    point1,
+                    point2,
+                    out var sortedPoint0,
+                    out var sortedPoint1);
+
+                    triCut.pointCount = 2;
+                    triCut.localCutPos0 = sortedPoint1;
+                    triCut.localCutPos1 = sortedPoint0;
+
                     lastFrameTriCutPoints.Add(triCut);
                 }
             }
@@ -233,13 +246,16 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                     
                     var targetMesh = gobj.GetComponent<MeshFilter>();
                     var meshCollider = gobj.AddComponent<MeshCollider>();
-                    meshCollider.sharedMesh = Instantiate(targetMesh.sharedMesh);
+                    var mesh = Instantiate(targetMesh.sharedMesh);
+                    
+                    meshCollider.sharedMesh = mesh;
                     meshCollider.convex = true;
 
-
-                    targetRb.ResetCenterOfMass();
-                    targetRb.ResetInertiaTensor();
-                    
+                    if(targetRb != null)
+                    {
+                        targetRb.ResetCenterOfMass();
+                        targetRb.ResetInertiaTensor();
+                    }
                     Destroy(target);
 
                     return meshCollider;
@@ -254,8 +270,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
     private void TryCuttingMeshCollider(MeshCollider meshCollider)
     {
         //this is the bit where it gets serious
-        List<int> newTrisAdded = new(512);
-        List<int> triIndicesRemoved = new(512);
+        HashSet<int> newTrisAdded = new(512);
+        HashSet<int> triIndicesRemoved = new(512);
 
         var meshFilter = meshCollider.GetComponent<MeshFilter>();
         var mesh = meshFilter.sharedMesh;
@@ -310,10 +326,35 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
             //we're adding 2 new verts
             int newTri0 = vertsBuffer.Count;
-            vertsBuffer.Add(triCut.localCutPos0);
-            int newTri1 = vertsBuffer.Count;
-            vertsBuffer.Add(triCut.localCutPos1);
+            int newTri1 = vertsBuffer.Count + 1;
+            bool gotOldVert0 = false;
+            bool gotOldVert1 = false;
+            for(int i = 0 ; i < vertsBuffer.Count; i++)
+            {
+                var existingVert0 = vertsBuffer[i];
+                if(existingVert0 == triCut.localCutPos0 && gotOldVert0 == false)
+                {
+                     newTri0 = i;
+                     gotOldVert0 = true;
+                }   
+                if(existingVert0 == triCut.localCutPos1 && gotOldVert1 == false)
+                {
+                    newTri1 = i;
+                    gotOldVert1 = true;
+                }
+            }
 
+            if (gotOldVert0 == false)
+            {
+                newTri0 = vertsBuffer.Count;
+                vertsBuffer.Add(triCut.localCutPos0);
+            }
+            if(gotOldVert1 == false)
+            {
+                newTri1 = vertsBuffer.Count;
+                vertsBuffer.Add(triCut.localCutPos1);
+            }
+            
             newTrisAdded.Add(newTri0);
             newTrisAdded.Add(newTri1);
 
@@ -354,14 +395,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                     survivingTri1 = triCut.tri1;
                 }
 
-                var chosenTriToFormSurvivingFace = newTri0;
-                switch(triCut.plane)
-                {
-                    case ePlane.TOP: chosenTriToFormSurvivingFace = newTri0; break;
-                    case ePlane.RIGHT: chosenTriToFormSurvivingFace = newTri0; break;
-                    case ePlane.BOTTOM: chosenTriToFormSurvivingFace = newTri1; break;
-                    case ePlane.LEFT: chosenTriToFormSurvivingFace = newTri1; break;
-                }
+                var chosenTriToFormSurvivingFace = newTri1;
                 CaptureMatchedWindingPlane(survivingTri0, survivingTri1, chosenTriToFormSurvivingFace, triCut.unityPlane);
             }
             else if(numInsideBounds == 2)
@@ -380,16 +414,173 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             }
             else if(numInsideBounds == 0)
             {
-                //this is a tricky scene, 
+                //we're not losing any verts. 
+
+                //the original tri will have been removed
+
+                var trisOnGoodSide = new List<int>();
+
+                if(point0OnCutSideOfPlane == false)
+                    trisOnGoodSide.Add(triCut.tri0);
+                if(point1OnCutSideOfPlane == false)
+                    trisOnGoodSide.Add(triCut.tri1);
+                if(point2OnCutSideOfPlane == false)
+                    trisOnGoodSide.Add(triCut.tri2);
+
+                var startingCorner = trisOnGoodSide[0];
+
+                CaptureMatchedWindingPlane(startingCorner, newTri0, newTri1, triCut.unityPlane);
+
+                if(trisOnGoodSide.Count > 1)
+                {
+                    CaptureMatchedWindingPlane(startingCorner, newTri0, trisOnGoodSide[1], triCut.unityPlane);
+                   // CaptureMatchedWindingPlane(startingCorner, newTri1, trisOnGoodSide[1], triCut.unityPlane);
+                }
             }
+        }
+
+      
+        //let's do it.
+        //find all faces which are entirely on the wrong side of our plane:
+        int numTriangles = triBuffer.Count / 3;
+        for(int i = 0 ; i < numTriangles; i++)
+        {
+            var triIndex0 = 0 + i * 3;
+            var triIndex1 = 1 + i * 3;
+            var triIndex2 = 2 + i * 3;
+
+            var tri0 = triBuffer[triIndex0];
+            var tri1 = triBuffer[triIndex1];
+            var tri2 = triBuffer[triIndex2];
+
+            var point0 = vertsBuffer[tri0];
+            var point1 = vertsBuffer[tri1];
+            var point2 = vertsBuffer[tri2];
+
+            var worldPoint0 = localToWorldMatrix.MultiplyPoint3x4(point0);
+            var worldPoint1 = localToWorldMatrix.MultiplyPoint3x4(point1);
+            var worldPoint2 = localToWorldMatrix.MultiplyPoint3x4(point2);
+            
+            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, ePlane.TOP);
+            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, ePlane.TOP);
+            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, ePlane.TOP);
+
+            if(point0OnCutSideOfPlane && point1OnCutSideOfPlane && point2OnCutSideOfPlane)
+            {
+                //whole face is to be dropped:
+                triBuffer[triIndex0] = 0;
+                triBuffer[triIndex1] = 0;
+                triBuffer[triIndex2] = 0;
+            }
+        }
+        
+        //we have added a bunch of new verts. 
+        //can we stitch them together?
+        var newTris = new List<int>(newTrisAdded);
+        newTris.Sort();
+        var triAdded0 = newTris[0];
+        var bottomUnityPlane = GetLocalUnityPlane(ePlane.BOTTOM, localToWorldMatrix);
+        for(int i = 1 ; i < newTris.Count - 1; i++)
+        {
+            //tri fan
+            var tri0 = triAdded0;
+            var tri1 = newTris[i];
+            var tri2 = newTris[i + 1];
+
+           // CaptureMatchedWindingPlane(tri0, tri1, tri2, bottomUnityPlane);
+
+        }
+
+        // var removeVerts = new HashSet<int>(); 
+        // //oofer doofer. need to weld our degenerate verts:
+        // for(int i = 0 ; i < vertsBuffer.Count; i++)
+        // {
+        //     var vert0 = vertsBuffer[i];
+
+        //     for(int j = i + 1 ; j < vertsBuffer.Count; j++)
+        //     {
+        //         var vert1 = vertsBuffer[j];
+
+        //         if(vert1 == vert0)
+        //         {
+        //             removeVerts.Add(j);
+                    
+        //             for(int k = 0 ; k < triBuffer.Count; k++)
+        //             {
+        //                 if(triBuffer[k] == j)
+        //                     triBuffer[k] = i;
+        //             }
+        //         }
+        //     }
+        // }
+        
+        // var removeVertList = new List<int>(removeVerts);
+        // removeVertList.Sort();
+        // for(int i = removeVerts.Count - 1; i >= 0; i--)
+        // {
+        //     var removeIndex = removeVertList[i];
+        //     vertsBuffer.RemoveAt(removeIndex);
+
+        //     for(int k = 0 ; k < triBuffer.Count; k++)
+        //     {
+        //         if(triBuffer[k] >= removeIndex)
+        //             triBuffer[k] = triBuffer[k] - 1;
+        //     }
+        // }
+
+        for(int i = 0 ; i < numTriangles; i++)
+        {
+            var triIndex0 = 0 + i * 3;
+            var triIndex1 = 1 + i * 3;
+            var triIndex2 = 2 + i * 3;
+
+            var tri0 = triBuffer[triIndex0];
+            var tri1 = triBuffer[triIndex1];
+            var tri2 = triBuffer[triIndex2];
+
+            for(int j = i + 1; j < numTriangles; j++)
+            {
+                var otherIndex0 = 0 + j * 3;
+                var otherIndex1 = 1 + j * 3;
+                var otherIndex2 = 2 + j * 3;
+
+                var otherTri0 = triBuffer[otherIndex0];
+                var otherTri1 = triBuffer[otherIndex1];
+                var otherTri2 = triBuffer[otherIndex2];
+
+                if(otherTri0 == tri0
+                && otherTri1 == tri1
+                && otherTri2 == tri2)
+                {
+                    //we have the same tri
+                    triBuffer[otherIndex0] = 0;
+                    triBuffer[otherIndex1] = 0;
+                    triBuffer[otherIndex2] = 0;
+
+                    triIndicesRemoved.Add(otherIndex0);
+                    triIndicesRemoved.Add(otherIndex1);
+                    triIndicesRemoved.Add(otherIndex2);
+                }
+            }
+        }
+
+
+        var removeList = new List<int>(triIndicesRemoved);
+        removeList.Sort();
+        for(int i = triIndicesRemoved.Count- 1; i >= 0; i--)
+        {
+           // triBuffer.RemoveAt(removeList[i]);
         }
 
         if(newTrisAdded.Count > 0)
         {
             mesh.vertices = vertsBuffer.ToArray();
             mesh.triangles = triBuffer.ToArray();
-            mesh.UploadMeshData(markNoLongerReadable: false);
+            mesh.RecalculateNormals();
+            
             meshFilter.sharedMesh = mesh;
+
+            meshCollider.sharedMesh = null;
             meshCollider.sharedMesh = mesh;
         }
     }
@@ -431,6 +622,18 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             case ePlane.LEFT: return (tlb, blb, tlf, blf);
             case ePlane.RIGHT: return (trb, brb, trf, brf);
         }
+    }
+
+    private Plane GetLocalUnityPlane(ePlane plane, Matrix4x4 localToWorldMatrix)
+    {
+        var worldPlane = GetPlane(plane);
+
+        var worldToLocalMatrix = localToWorldMatrix.inverse;
+        var localBackA = worldToLocalMatrix.MultiplyPoint( worldPlane.backA );
+        var localBackB = worldToLocalMatrix.MultiplyPoint( worldPlane.backB );
+        var localFrontA = worldToLocalMatrix.MultiplyPoint( worldPlane.frontA );
+        var localPlane = new Plane( localBackA, localBackB, localFrontA );
+        return localPlane;
     }
 
     private bool LocalBoundsContains(Vector3 worldVert)
