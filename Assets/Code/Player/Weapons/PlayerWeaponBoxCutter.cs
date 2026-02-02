@@ -130,10 +130,10 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         vertsBuffer.Clear();
         triBuffer.Clear();
 
-        // CastPlaneAgainstMesh(ePlane.TOP, mesh, meshWorldMatrix, meshLocalMatrix);
+        CastPlaneAgainstMesh(ePlane.TOP, mesh, meshWorldMatrix, meshLocalMatrix);
         CastPlaneAgainstMesh(ePlane.BOTTOM, mesh, meshWorldMatrix, meshLocalMatrix);
-        // CastPlaneAgainstMesh(ePlane.LEFT, mesh, meshWorldMatrix, meshLocalMatrix);
-        // CastPlaneAgainstMesh(ePlane.RIGHT, mesh, meshWorldMatrix, meshLocalMatrix);
+        CastPlaneAgainstMesh(ePlane.LEFT, mesh, meshWorldMatrix, meshLocalMatrix);
+        CastPlaneAgainstMesh(ePlane.RIGHT, mesh, meshWorldMatrix, meshLocalMatrix);
     }
 
     private void CastPlaneAgainstMesh(ePlane plane, Mesh mesh, Matrix4x4 meshWorldMatrix, Matrix4x4 meshLocalMatrix)
@@ -350,13 +350,12 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             newTrisAdded.Add(newTri0);
             newTrisAdded.Add(newTri1);
 
-            //we're not losing any verts. 
-
-            //the original tri will have been removed
-
             var trisOnGoodSide = new List<int>();
 
             var facePlane = new Plane(vertsBuffer[triCut.tri1], vertsBuffer[triCut.tri0], vertsBuffer[triCut.tri2]);
+
+            //to do a BOX cut we need to do more than simply check bounds or not - as we end up with nobody taking care
+            //of the sort of 'corner tri'. if we do a bounds check we end up making a cap using the wrong list - it does that annoying slanty cut thing where newvert-left links to tri-point upper-right
 
             if(point0OnCutSideOfPlane == false)
                 trisOnGoodSide.Add(triCut.tri0);
@@ -373,7 +372,38 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             BuildCap(triList, facePlane);
         }
 
-      
+        /*
+        EliminateRemovedVerts(localToWorldMatrix);
+        
+        //we have added a bunch of new verts. 
+        //can we stitch them together?
+        var newTris = new List<int>(newTrisAdded);
+        var topUnityPlane = GetLocalUnityPlane(ePlane.TOP, localToWorldMatrix);
+        BuildCap(newTris, topUnityPlane);
+      */
+
+        var result = MeshIntersection.TidyMesh(triBuffer, vertsBuffer);
+
+        if(newTrisAdded.Count > 0)
+        {
+            mesh.Clear();
+            mesh.vertices = result.verts.ToArray();
+            mesh.triangles = result.tris.ToArray();
+            mesh.RecalculateBounds();
+            mesh.RecalculateNormals();
+            mesh.RecalculateTangents();
+            
+            meshFilter.sharedMesh = mesh;
+
+            meshCollider.sharedMesh = null;
+            meshCollider.sharedMesh = mesh;
+            Physics.BakeMesh(mesh.GetInstanceID(), true);
+        }
+    }
+
+    private void EliminateRemovedVerts(Matrix4x4 localToWorldMatrix)
+    {
+        
         //let's do it.
         //find all faces which are entirely on the wrong side of our plane:
         int numTriangles = triBuffer.Count / 3;
@@ -406,30 +436,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                 triBuffer[triIndex1] = 0;
                 triBuffer[triIndex2] = 0;
             }
-        }
-        
-        //we have added a bunch of new verts. 
-        //can we stitch them together?
-        var newTris = new List<int>(newTrisAdded);
-        var topUnityPlane = GetLocalUnityPlane(ePlane.TOP, localToWorldMatrix);
-        BuildCap(newTris, topUnityPlane);
-      
-        var result = MeshIntersection.TidyMesh(triBuffer, vertsBuffer);
-
-        if(newTrisAdded.Count > 0)
-        {
-            mesh.Clear();
-            mesh.vertices = result.verts.ToArray();
-            mesh.triangles = result.tris.ToArray();
-            mesh.RecalculateBounds();
-            mesh.RecalculateNormals();
-            mesh.RecalculateTangents();
-            
-            meshFilter.sharedMesh = mesh;
-
-            meshCollider.sharedMesh = null;
-            meshCollider.sharedMesh = mesh;
-            Physics.BakeMesh(mesh.GetInstanceID(), true);
         }
     }
 
@@ -540,6 +546,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
     private void BuildCap(List<int> tris, Plane referencePlane)
     {
+        if(tris.Count <= 0)
+            return;
+
         var capVerts = new List<CapVert>();
         foreach(var tri in tris)
         {

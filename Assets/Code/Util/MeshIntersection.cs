@@ -22,10 +22,10 @@ public static class MeshIntersection
     {
         outPoints.Clear();
 
-        // CheckEdgeAgainstFace(planeV0, planeV1, triV0, triV1, triV2, outPoints);
-        // CheckEdgeAgainstFace(planeV1, planeV2, triV0, triV1, triV2, outPoints);
-        // CheckEdgeAgainstFace(planeV2, planeV3, triV0, triV1, triV2, outPoints);
-        // CheckEdgeAgainstFace(planeV3, planeV0, triV0, triV1, triV2, outPoints);
+        CheckEdgeAgainstFace(planeV0, planeV1, triV0, triV1, triV2, outPoints);
+        CheckEdgeAgainstFace(planeV1, planeV2, triV0, triV1, triV2, outPoints);
+        CheckEdgeAgainstFace(planeV2, planeV3, triV0, triV1, triV2, outPoints);
+        CheckEdgeAgainstFace(planeV3, planeV0, triV0, triV1, triV2, outPoints);
         
         CheckEdgeAgainstFace(triV0, triV1, planeV0, planeV1, planeV2, planeV3, outPoints);
         CheckEdgeAgainstFace(triV1, triV2, planeV0, planeV1, planeV2, planeV3, outPoints);
