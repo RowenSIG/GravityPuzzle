@@ -1,5 +1,9 @@
 using UnityEngine;
 using System.Collections.Generic;
+using System;
+using System.Text.RegularExpressions;
+using System.Linq;
+using UnityEngine.UIElements;
 
 //AI CODE
 
@@ -14,17 +18,14 @@ public static class MeshIntersection
     /// </summary>
     public static void GetTrianglePlaneIntersection( List<Vector3> outPoints, 
         Vector3 triV0, Vector3 triV1, Vector3 triV2, // Mesh Face
-        Vector3 planeV0, Vector3 planeV1, Vector3 planeV2, Vector3 planeV3,
-        out int triEdgeIntersectionCount) // Finite Quad Plane
+        Vector3 planeV0, Vector3 planeV1, Vector3 planeV2, Vector3 planeV3) // Finite Quad Plane
     {
         outPoints.Clear();
 
-        CheckEdgeAgainstFace(planeV0, planeV1, triV0, triV1, triV2, outPoints);
-        CheckEdgeAgainstFace(planeV1, planeV2, triV0, triV1, triV2, outPoints);
-        CheckEdgeAgainstFace(planeV2, planeV3, triV0, triV1, triV2, outPoints);
-        CheckEdgeAgainstFace(planeV3, planeV0, triV0, triV1, triV2, outPoints);
-
-        triEdgeIntersectionCount = outPoints.Count;
+        // CheckEdgeAgainstFace(planeV0, planeV1, triV0, triV1, triV2, outPoints);
+        // CheckEdgeAgainstFace(planeV1, planeV2, triV0, triV1, triV2, outPoints);
+        // CheckEdgeAgainstFace(planeV2, planeV3, triV0, triV1, triV2, outPoints);
+        // CheckEdgeAgainstFace(planeV3, planeV0, triV0, triV1, triV2, outPoints);
         
         CheckEdgeAgainstFace(triV0, triV1, planeV0, planeV1, planeV2, planeV3, outPoints);
         CheckEdgeAgainstFace(triV1, triV2, planeV0, planeV1, planeV2, planeV3, outPoints);
@@ -84,40 +85,106 @@ public static class MeshIntersection
         return true;
     }
 
-    public static void GetCutVertsInCorrectOrder(Vector3 cutVert0
-                                                , Vector3 cutVert1
-                                                , Vector3 triVert0
-                                                , Vector3 triVert1
-                                                , Vector3 triVert2
-                                                , out Vector3 sortedPoint0
-                                                , out Vector3 sortedPoint1 )
+    public static (List<int> tris, List<Vector3> verts) TidyMesh(List<int> tris, List<Vector3> verts)
     {
-        var centroid = Vector3.zero;
-        centroid += triVert0;
-        centroid += triVert1;
-        centroid += triVert2;
-        centroid /= 3f;
+        Vector3 anyValidVert = verts[0];
 
-        var dirVector = centroid - triVert0;
-        var cutVertDir0 = centroid - cutVert0;
-        var cutVertDir1 = centroid - cutVert1;
+        Dictionary<int, int> remapVertInts = new();
 
-        var plane = new Plane(triVert0, triVert1, triVert2);
-        var normal = plane.normal;
-
-        float angle0 = Vector3.SignedAngle(dirVector, cutVertDir0, normal);
-        float angle1 = Vector3.Angle(dirVector, cutVertDir1);
-
-        if(angle1 > angle0)
+        //find alike verts:
+        for(int i = 0 ; i < verts.Count; i ++)
         {
-            sortedPoint0 = cutVert0;
-            sortedPoint1 = cutVert1;
+            var originalVert = verts[i];
+            var tri = i;
+
+            //is this the same vert as one later in the list?
+            for(int j = verts.Count - 1; j > i; j--)
+            {
+                if(remapVertInts.ContainsKey(j))
+                    continue;
+                    
+                var otherVert = verts[j];
+                var otherTri = j;
+
+                if((otherVert - originalVert).sqrMagnitude < 0.00001f)
+                {
+                    remapVertInts.Add(otherTri, tri);
+                }
+            }
         }
-        else
+
+        //swap indices:
+        for(int i = 0; i < tris.Count; i++)
         {
-            sortedPoint0 = cutVert1;
-            sortedPoint1 = cutVert0;
+            var tri = tris[i];
+            if(remapVertInts.TryGetValue(tri, out var newtri))
+            {
+                tris[i] = newtri;
+            }
         }
+
+        Dictionary<int, int> preserveVertInts = new();
+        var newVerts = new List<Vector3>();
+        for(int i = 0 ; i < verts.Count; i++)
+        {
+            // if(tris.Contains(i) == false)
+            //     continue;
+
+            preserveVertInts.Add(i, newVerts.Count);
+            newVerts.Add(verts[i]);
+        }
+
+        //update any tri which was pointed at a vert to point at that same vert but its new point in the list
+        for(int i = 0 ; i< tris.Count; i++)
+        {
+            var tri = tris[i];
+            if(preserveVertInts.TryGetValue(tri, out var newIndex))
+                tris[i] = newIndex;
+        }
+
+        //and finally, don't want repeated faces:
+        List<int> newTris = new List<int>();
+
+        var numFaces = tris.Count / 3; 
+        for(int i = 0; i < numFaces; i++)
+        {
+            var tri0 = tris[0 + i * 3];
+            var tri1 = tris[1 + i * 3];
+            var tri2 = tris[2 + i * 3];
+
+            bool duplicate = false;
+
+            for(int j = 0 ; j < i ; j ++)
+            {
+                    
+                var alreadyTri0 = tris[0 + j * 3];
+                var alreadyTri1 = tris[1 + j * 3];
+                var alreadyTri2 = tris[2 + j * 3];
+
+                if(Same(tri0, tri1, tri2, alreadyTri0, alreadyTri1, alreadyTri2))
+                    duplicate = true;
+            }
+
+            if(duplicate == false)
+            {
+                newTris.Add(tri0);
+                newTris.Add(tri1);
+                newTris.Add(tri2);
+            }
+        }
+
+        return (newTris, newVerts);
+    }
+
+    private static bool Same(int tri0, int tri1, int tri2, int otherTri0, int otherTri1, int otherTri2)
+    {
+        if(tri0 == otherTri0 && tri1 == otherTri1 && tri2 == otherTri2)
+            return true;
+        if(tri0 == otherTri1 && tri1 == otherTri2 && tri2 == otherTri0)
+            return true;
+        if(tri0 == otherTri2 && tri1 == otherTri0 && tri2 == otherTri1)
+            return true;
+        return false;
     }
 }
 

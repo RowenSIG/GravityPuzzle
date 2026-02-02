@@ -228,7 +228,7 @@ MonoBehaviour:
   boxCenterTransform: {fileID: 1353075241068098058}
   width: 4
   height: 0.2
-  depth: 5
+  depth: 8
 --- !u!1 &655829372726506928
 GameObject:
   m_ObjectHideFlags: 0
