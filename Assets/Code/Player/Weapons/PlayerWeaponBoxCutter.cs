@@ -418,6 +418,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
         if(newTrisAdded.Count > 0)
         {
+            mesh.Clear();
             mesh.vertices = result.verts.ToArray();
             mesh.triangles = result.tris.ToArray();
             mesh.RecalculateBounds();

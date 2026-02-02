@@ -87,8 +87,6 @@ public static class MeshIntersection
 
     public static (List<int> tris, List<Vector3> verts) TidyMesh(List<int> tris, List<Vector3> verts)
     {
-        Vector3 anyValidVert = verts[0];
-
         Dictionary<int, int> remapVertInts = new();
 
         //find alike verts:
@@ -123,27 +121,10 @@ public static class MeshIntersection
             }
         }
 
-        Dictionary<int, int> preserveVertInts = new();
-        var newVerts = new List<Vector3>();
-        for(int i = 0 ; i < verts.Count; i++)
-        {
-            // if(tris.Contains(i) == false)
-            //     continue;
-
-            preserveVertInts.Add(i, newVerts.Count);
-            newVerts.Add(verts[i]);
-        }
-
-        //update any tri which was pointed at a vert to point at that same vert but its new point in the list
-        for(int i = 0 ; i< tris.Count; i++)
-        {
-            var tri = tris[i];
-            if(preserveVertInts.TryGetValue(tri, out var newIndex))
-                tris[i] = newIndex;
-        }
+      
 
         //and finally, don't want repeated faces:
-        List<int> newTris = new List<int>();
+        var newTris = new List<int>();
 
         var numFaces = tris.Count / 3; 
         for(int i = 0; i < numFaces; i++)
@@ -156,7 +137,6 @@ public static class MeshIntersection
 
             for(int j = 0 ; j < i ; j ++)
             {
-                    
                 var alreadyTri0 = tris[0 + j * 3];
                 var alreadyTri1 = tris[1 + j * 3];
                 var alreadyTri2 = tris[2 + j * 3];
@@ -171,6 +151,25 @@ public static class MeshIntersection
                 newTris.Add(tri1);
                 newTris.Add(tri2);
             }
+        }
+
+        Dictionary<int, int> preserveVertInts = new();
+        var newVerts = new List<Vector3>();
+        for(int i = 0 ; i < verts.Count; i++)
+        {
+            if(newTris.Contains(i) == false)
+                continue;
+
+            preserveVertInts.Add(i, newVerts.Count);
+            newVerts.Add(verts[i]);
+        }
+
+        //update any tri which was pointed at a vert to point at that same vert but its new point in the list
+        for(int i = 0 ; i < newTris.Count; i++)
+        {
+            var tri = newTris[i];
+            if(preserveVertInts.TryGetValue(tri, out var newIndex))
+                newTris[i] = newIndex;
         }
 
         return (newTris, newVerts);
