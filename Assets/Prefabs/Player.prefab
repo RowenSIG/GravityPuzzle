@@ -226,9 +226,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerWeaponBoxCutter
   boxCenterTransform: {fileID: 1353075241068098058}
-  width: 1
-  height: 1
-  depth: 4
+  width: 0.2
+  height: 0.2
+  depth: 8
 --- !u!1 &655829372726506928
 GameObject:
   m_ObjectHideFlags: 0

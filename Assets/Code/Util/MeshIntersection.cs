@@ -1,8 +1,5 @@
 using UnityEngine;
 using System.Collections.Generic;
-using System;
-using System.Text.RegularExpressions;
-using System.Linq;
 using UnityEngine.UIElements;
 
 //AI CODE
@@ -18,7 +15,8 @@ public static class MeshIntersection
     /// </summary>
     public static void GetTrianglePlaneIntersection( List<Vector3> outPoints, 
         Vector3 triV0, Vector3 triV1, Vector3 triV2, // Mesh Face
-        Vector3 planeV0, Vector3 planeV1, Vector3 planeV2, Vector3 planeV3) // Finite Quad Plane
+        Vector3 planeV0, Vector3 planeV1, Vector3 planeV2, Vector3 planeV3, // Finite Quad Plane
+        out int triLineCutCount) 
     {
         outPoints.Clear();
 
@@ -26,11 +24,15 @@ public static class MeshIntersection
         CheckEdgeAgainstFace(planeV1, planeV2, triV0, triV1, triV2, outPoints);
         CheckEdgeAgainstFace(planeV2, planeV3, triV0, triV1, triV2, outPoints);
         CheckEdgeAgainstFace(planeV3, planeV0, triV0, triV1, triV2, outPoints);
+
+        int before = outPoints.Count;
         
         CheckEdgeAgainstFace(triV0, triV1, planeV0, planeV1, planeV2, planeV3, outPoints);
         CheckEdgeAgainstFace(triV1, triV2, planeV0, planeV1, planeV2, planeV3, outPoints);
         CheckEdgeAgainstFace(triV2, triV0, planeV0, planeV1, planeV2, planeV3, outPoints);
 
+        int after = outPoints.Count;
+        triLineCutCount = after - before;
     }
 
      private static void CheckEdgeAgainstFace(Vector3 L1, Vector3 L2, Vector3 v0, Vector3 v1, Vector3 v2, List<Vector3> results)
@@ -85,6 +87,7 @@ public static class MeshIntersection
         return true;
     }
 
+    private static readonly float vertEpsilonSquared = (0.01f * 0.01f);
     public static (List<int> tris, List<Vector3> verts) TidyMesh(List<int> tris, List<Vector3> verts)
     {
         Dictionary<int, int> remapVertInts = new();
@@ -104,7 +107,7 @@ public static class MeshIntersection
                 var otherVert = verts[j];
                 var otherTri = j;
 
-                if((otherVert - originalVert).sqrMagnitude < 0.00001f)
+                if((otherVert - originalVert).sqrMagnitude < vertEpsilonSquared)
                 {
                     remapVertInts.Add(otherTri, tri);
                 }
