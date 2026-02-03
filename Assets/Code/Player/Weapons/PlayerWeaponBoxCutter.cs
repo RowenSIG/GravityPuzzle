@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Mono.Cecil;
+using NUnit.Framework.Constraints;
 using UnityEngine;
 
 public class PlayerWeaponBoxCutter : PlayerWeapon
@@ -357,6 +358,24 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             triList.Add(newTri1);
 
             BuildCap(triList, facePlane, triBuffer, true);
+
+            //also, the other side of the plane... ?
+            var trisOnBadSide = new List<int>();
+            
+            if(point0OnCutSideOfPlane)
+                trisOnBadSide.Add(triCut.tri0);
+            if(point1OnCutSideOfPlane)
+                trisOnBadSide.Add(triCut.tri1);
+            if(point2OnCutSideOfPlane)
+                trisOnBadSide.Add(triCut.tri2);
+                
+            var triList2 = new List<int>();
+            triList2.AddRange(trisOnBadSide);
+            triList2.Add(newTri0);
+            triList2.Add(newTri1);
+
+            BuildCap(triList2, facePlane, triBuffer2, true);
+
         }
 
       
@@ -438,11 +457,11 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             var worldPoint1 = localToWorldMatrix.MultiplyPoint3x4(point1);
             var worldPoint2 = localToWorldMatrix.MultiplyPoint3x4(point2);
             
-            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, ePlane.BOTTOM);
-            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, ePlane.BOTTOM);
-            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, ePlane.BOTTOM);
+            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, ePlane.BOTTOM, true);
+            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, ePlane.BOTTOM, true);
+            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, ePlane.BOTTOM, true);
 
-            if(point0OnCutSideOfPlane == false && point1OnCutSideOfPlane == false && point2OnCutSideOfPlane == false)
+            if(point0OnCutSideOfPlane && point1OnCutSideOfPlane && point2OnCutSideOfPlane)
             {
                 triBuffer2[triIndex0] = 0;
                 triBuffer2[triIndex1] = 0;
@@ -452,13 +471,14 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         
         newTris = new List<int>(newTrisAdded);
         limitPlane = GetLocalUnityPlane(ePlane.BOTTOM, localToWorldMatrix);
-        BuildCap(newTris, limitPlane, triBuffer2, true);
+        BuildCap(newTris, limitPlane, triBuffer2, false);
       
-        //result = MeshIntersection.TidyMesh(triBuffer2, vertsBuffer);
+        result = MeshIntersection.TidyMesh(triBuffer2, vertsBuffer);
         
          if(newTrisAdded.Count > 0)
         {
-            var parent = meshFilter.transform;
+            var originalBody = meshFilter.gameObject;
+            var originalTransform = originalBody.transform;
 
             mesh = Instantiate(mesh);
             mesh.Clear();
@@ -468,21 +488,35 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             mesh.RecalculateNormals();
             mesh.RecalculateTangents();
             
-            var child = new GameObject();
-            child.transform.SetParent( meshFilter.transform, false );
-            child.transform.localScale = Vector3.one;
+            var clone = new GameObject();
+            clone.transform.SetParent( originalTransform.parent, false );
+            clone.name = originalBody.name + "_clone";
+            clone.transform.localScale = originalTransform.localScale;
+            clone.transform.position = originalTransform.position;
 
-            meshFilter = child.AddComponent<MeshFilter>();
-            meshCollider = child.AddComponent<MeshCollider>();
+            meshFilter = clone.AddComponent<MeshFilter>();
+            meshCollider = clone.AddComponent<MeshCollider>();
             meshCollider.convex = true;
             meshFilter.sharedMesh = mesh;
 
             meshCollider.sharedMesh = null;
             meshCollider.sharedMesh = mesh;
 
-            var rend = child.AddComponent<MeshRenderer>();
-            rend.material = parent.GetComponent<MeshRenderer>().material;
+            var rend = clone.AddComponent<MeshRenderer>();
+            rend.material = originalBody.GetComponent<MeshRenderer>().material;
             Physics.BakeMesh(mesh.GetInstanceID(), true);
+
+            var body = originalBody.GetComponent<Rigidbody>();
+            if(body != null)
+            {
+                var cloneBody = clone.AddComponent<Rigidbody>();
+                cloneBody.mass = body.mass;
+                cloneBody.angularDamping = body.angularDamping;
+                cloneBody.linearDamping = body.linearDamping;
+                cloneBody.useGravity = body.useGravity;
+                cloneBody.automaticInertiaTensor = true;
+                cloneBody.automaticCenterOfMass = true;
+            }
         }
 
     }
@@ -538,14 +572,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         return localPlane;
     }
 
-    private bool LocalBoundsContains(Vector3 worldVert)
-    {
-        var localVert = transform.InverseTransformPoint(worldVert);
-        return localBoxBounds.Contains(localVert);
-    }
-
-
-    private bool VertPositionedOnCutSideOfPlane(Vector3 worldVert, ePlane plane)
+    private bool VertPositionedOnCutSideOfPlane(Vector3 worldVert, ePlane plane, bool flip = false)
     {
 
         //we need to get our plane 'normal' and get the dot against the localVert 
@@ -555,11 +582,11 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         switch(plane)
         {
             default:
-            case ePlane.TOP: return myPlane.GetSide(worldVert) == false;
-            case ePlane.RIGHT: return myPlane.GetSide(worldVert) == false ;
+            case ePlane.TOP: return myPlane.GetSide(worldVert) == flip;
+            case ePlane.RIGHT: return myPlane.GetSide(worldVert) == flip;
 
-            case ePlane.BOTTOM: return myPlane.GetSide(worldVert);
-            case ePlane.LEFT: return myPlane.GetSide(worldVert);
+            case ePlane.BOTTOM: return myPlane.GetSide(worldVert) != flip;
+            case ePlane.LEFT: return myPlane.GetSide(worldVert) != flip;
         }
     }
 

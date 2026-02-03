@@ -133,6 +133,11 @@ public static class MeshIntersection
 
             bool duplicate = false;
 
+            if(tri0 == tri1 || tri1 == tri2 || tri2 == tri0)
+            {
+                continue;
+            }
+
             for(int j = 0 ; j < i ; j ++)
             {
                 var alreadyTri0 = tris[0 + j * 3];
@@ -175,6 +180,10 @@ public static class MeshIntersection
 
     private static bool Same(int tri0, int tri1, int tri2, int otherTri0, int otherTri1, int otherTri2)
     {
+        //can't be a proper face if two tris are the same
+        if(tri0 == tri1 || tri1 == tri2 || tri2 == tri0)
+            return true;
+
         if(tri0 == otherTri0 && tri1 == otherTri1 && tri2 == otherTri2)
             return true;
         if(tri0 == otherTri1 && tri1 == otherTri2 && tri2 == otherTri0)
