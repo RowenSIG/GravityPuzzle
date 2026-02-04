@@ -159,7 +159,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         var meshLocalMatrix = meshFilter.transform.localToWorldMatrix;
         var mesh = meshFilter.mesh;
 
-        var minDimensionSize = 0.25f;
+        var minDimensionSize = 0.22f;
         var bounds = mesh.bounds;
         var size = meshFilter.transform.TransformVector(bounds.size);
         size.x = Mathf.Abs(size.x);
@@ -170,7 +170,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             //Debug.Log($"MeshDimensionTooLow - skip. [{meshFilter.name}]");
             return;
         }
-        var minVolume = (0.33f * 0.33f * 0.33f);
+        var minVolume = (0.25f * 0.25f * 0.25f);
         if(size.x * size.y * size.z < minVolume)
         {
             Debug.Log($"MeshVolumeTooLow - skip. [{meshFilter.name}]");
@@ -624,9 +624,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
         var center = source.position ;
 
-        Vector3 lb = center + (-right);// + (-forward);
+        Vector3 lb = center + (-right) + (-forward);
         Vector3 lf = center + (-right) + forward;
-        Vector3 rb = center + right;// + (-forward);
+        Vector3 rb = center + right + (-forward);
         Vector3 rf = center + right + forward;
 
         return (lb, rb, lf, rf);
