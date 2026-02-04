@@ -24,6 +24,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
         public Plane unityPlane;
 
+        public Plane cutPlane;
+
         public Vector3 localCutPos0;
         public Vector3 localCutPos1;
 
@@ -38,6 +40,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
     private List<int> triBuffer = new (65535);
     private List<int> triBuffer2 = new (65535);
     private List<Vector3> vertsBuffer = new(65535);
+    private List<Vector3> normalsBuffer = new (65535);
+    private List<Vector2> uvBuffer = new (65535);
     private List<Vector3> intersectionPointBuffer = new(4); //should be max 2
 
     private Bounds localBoxBounds;
@@ -46,6 +50,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
     public float height;
     //depth is fixed
     public float depth = 10f;
+
+    public bool separateCutParts = true;
 
     private bool canFire = false;
     private bool CanFire
@@ -154,6 +160,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             mesh.GetTriangles(triBuffer, i);
             mesh.GetTriangles(triBuffer2, i);
             mesh.GetVertices(vertsBuffer);
+            mesh.GetNormals(normalsBuffer);
+            mesh.GetUVs(0, uvBuffer);
 
             int numTriangles = triBuffer.Count / 3;
 
@@ -197,6 +205,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                     triCut.tri2 = tri2;
                     triCut.plane = plane;
                     triCut.unityPlane = new Plane(point0, point1, point2);
+                    triCut.cutPlane = new Plane(localBackA, localFrontB, localBackb);
 
                     triCut.pointCount = 2;
                     
@@ -274,8 +283,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         var localToWorldMatrix = meshCollider.transform.localToWorldMatrix;
 
         //we have a list of tricuts from our raycasts. 
-
-
         foreach(var triCut in lastFrameTriCutPoints)
         {
             if(triCut.pointCount != 2)
@@ -311,37 +318,23 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             //we're adding 2 new verts
             int newTri0 = vertsBuffer.Count;
             int newTri1 = vertsBuffer.Count + 1;
-            bool gotOldVert0 = false;
-            bool gotOldVert1 = false;
-            for(int i = 0 ; i < vertsBuffer.Count; i++)
-            {
-                var existingVert0 = vertsBuffer[i];
-                if(existingVert0 == triCut.localCutPos0 && gotOldVert0 == false)
-                {
-                     newTri0 = i;
-                     gotOldVert0 = true;
-                }   
-                if(existingVert0 == triCut.localCutPos1 && gotOldVert1 == false)
-                {
-                    newTri1 = i;
-                    gotOldVert1 = true;
-                }
-            }
 
-            if (gotOldVert0 == false)
-            {
-                newTri0 = vertsBuffer.Count;
-                vertsBuffer.Add(triCut.localCutPos0);
-            }
-            if(gotOldVert1 == false)
-            {
-                newTri1 = vertsBuffer.Count;
-                vertsBuffer.Add(triCut.localCutPos1);
-            }
+            //what is our NORMAL, well it's our plane's normal!
+            var newNormal = normalsBuffer[triCut.tri0];
+
+            var newUV0 = GetUV(triCut.localCutPos0, triCut.tri0, triCut.tri1, triCut.tri2);
+            var newUV1 = GetUV(triCut.localCutPos1, triCut.tri0, triCut.tri1, triCut.tri2);
+
+            newTri0 = vertsBuffer.Count;
+            vertsBuffer.Add(triCut.localCutPos0);
+            normalsBuffer.Add(newNormal);
+            uvBuffer.Add(newUV0);
+
+            newTri1 = vertsBuffer.Count;
+            vertsBuffer.Add(triCut.localCutPos1);
+            normalsBuffer.Add(newNormal);
+            uvBuffer.Add(newUV1);
             
-            newTrisAdded.Add(newTri0);
-            newTrisAdded.Add(newTri1);
-
             var trisOnGoodSide = new List<int>();
             var facePlane = new Plane(vertsBuffer[triCut.tri1], vertsBuffer[triCut.tri0], vertsBuffer[triCut.tri2]);
 
@@ -351,6 +344,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                 trisOnGoodSide.Add(triCut.tri1);
             if(point2OnCutSideOfPlane == false)
                 trisOnGoodSide.Add(triCut.tri2);
+
 
             var triList = new List<int>();
             triList.AddRange(trisOnGoodSide);
@@ -369,6 +363,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             if(point2OnCutSideOfPlane)
                 trisOnBadSide.Add(triCut.tri2);
                 
+
             var triList2 = new List<int>();
             triList2.AddRange(trisOnBadSide);
             triList2.Add(newTri0);
@@ -376,6 +371,19 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
             BuildCap(triList2, facePlane, triBuffer2, true);
 
+            //we duplicate our verts so our cap doesn't share normals with the SIDES
+            var planeNormal = triCut.cutPlane.normal;
+            var capTri0 = vertsBuffer.Count;
+            var capTri1 = vertsBuffer.Count + 1;
+            vertsBuffer.Add(triCut.localCutPos0);
+            vertsBuffer.Add(triCut.localCutPos1);
+            normalsBuffer.Add(planeNormal);
+            normalsBuffer.Add(planeNormal);
+            uvBuffer.Add(newUV0);
+            uvBuffer.Add(newUV1);
+
+            newTrisAdded.Add(capTri0);
+            newTrisAdded.Add(capTri1);
         }
 
       
@@ -419,16 +427,18 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         var limitPlane = GetLocalUnityPlane(ePlane.BOTTOM, localToWorldMatrix);
         BuildCap(newTris, limitPlane, triBuffer, true);
       
-        var result = MeshIntersection.TidyMesh(triBuffer, vertsBuffer);
+        var result = MeshIntersection.TidyMesh(triBuffer, vertsBuffer, normalsBuffer, uvBuffer);
 
         if(newTrisAdded.Count > 0)
         {
             mesh.Clear();
             mesh.vertices = result.verts.ToArray();
             mesh.triangles = result.tris.ToArray();
+            mesh.normals = result.normals.ToArray();
+            mesh.uv = result.uvs.ToArray();
             mesh.RecalculateBounds();
-            mesh.RecalculateNormals();
-            mesh.RecalculateTangents();
+            // mesh.RecalculateNormals();
+            // mesh.RecalculateTangents();
             
             meshFilter.sharedMesh = mesh;
 
@@ -468,31 +478,48 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                 triBuffer2[triIndex2] = 0;
             }
         }
+
+        //Flip the normals now.
+        foreach(var tri in newTrisAdded)
+        {
+            normalsBuffer[tri] = -normalsBuffer[tri];
+        }
         
         newTris = new List<int>(newTrisAdded);
         limitPlane = GetLocalUnityPlane(ePlane.BOTTOM, localToWorldMatrix);
         BuildCap(newTris, limitPlane, triBuffer2, false);
       
-        result = MeshIntersection.TidyMesh(triBuffer2, vertsBuffer);
+        result = MeshIntersection.TidyMesh(triBuffer2, vertsBuffer, normalsBuffer, uvBuffer);
         
-         if(newTrisAdded.Count > 0)
+        if(newTrisAdded.Count > 0)
         {
-            var originalBody = meshFilter.gameObject;
+            var originalBody = meshCollider.attachedRigidbody;
+            var originalObject = originalBody != null ? originalBody.gameObject : meshCollider.gameObject;
             var originalTransform = originalBody.transform;
 
             mesh = Instantiate(mesh);
             mesh.Clear();
             mesh.vertices = result.verts.ToArray();
             mesh.triangles = result.tris.ToArray();
+            mesh.normals = result.normals.ToArray();
+            mesh.uv = result.uvs.ToArray();
             mesh.RecalculateBounds();
-            mesh.RecalculateNormals();
-            mesh.RecalculateTangents();
+            // mesh.RecalculateNormals();
+            // mesh.RecalculateTangents();
             
             var clone = new GameObject();
-            clone.transform.SetParent( originalTransform.parent, false );
-            clone.name = originalBody.name + "_clone";
+
+            var parentTransform = originalTransform;
+            if(separateCutParts)
+            {
+                parentTransform = originalTransform.parent;
+            }
+
+            clone.transform.SetParent( parentTransform, false );
+            clone.name = originalObject.name + "_clone";
             clone.transform.localScale = originalTransform.localScale;
             clone.transform.position = originalTransform.position;
+            clone.transform.localRotation = originalTransform.localRotation;
 
             meshFilter = clone.AddComponent<MeshFilter>();
             meshCollider = clone.AddComponent<MeshCollider>();
@@ -503,19 +530,21 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             meshCollider.sharedMesh = mesh;
 
             var rend = clone.AddComponent<MeshRenderer>();
-            rend.material = originalBody.GetComponent<MeshRenderer>().material;
+            rend.material = originalObject.GetComponent<MeshRenderer>().material;
             Physics.BakeMesh(mesh.GetInstanceID(), true);
 
-            var body = originalBody.GetComponent<Rigidbody>();
-            if(body != null)
+            if (separateCutParts)
             {
-                var cloneBody = clone.AddComponent<Rigidbody>();
-                cloneBody.mass = body.mass;
-                cloneBody.angularDamping = body.angularDamping;
-                cloneBody.linearDamping = body.linearDamping;
-                cloneBody.useGravity = body.useGravity;
-                cloneBody.automaticInertiaTensor = true;
-                cloneBody.automaticCenterOfMass = true;
+                if (originalBody != null)
+                {
+                    var cloneBody = clone.AddComponent<Rigidbody>();
+                    cloneBody.mass = originalBody.mass;
+                    cloneBody.angularDamping = originalBody.angularDamping;
+                    cloneBody.linearDamping = originalBody.linearDamping;
+                    cloneBody.useGravity = true;
+                    cloneBody.automaticInertiaTensor = true;
+                    cloneBody.automaticCenterOfMass = true;
+                }
             }
         }
 
@@ -609,6 +638,20 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             triBuffer.Add(tri2);
             triBuffer.Add(tri1);
         }
+    }
+
+    private Vector2 GetUV(Vector3 vertPos, int tri0, int tri1, int tri2)
+    {
+        var point0 = vertsBuffer[tri0];
+        var point1 = vertsBuffer[tri1];
+        var point2 = vertsBuffer[tri2];
+
+        var uv0 = uvBuffer[tri0];
+        var uv1 = uvBuffer[tri1];
+        var uv2 = uvBuffer[tri2];
+
+        var uv = MeshIntersection.GetUV(vertPos, point0, point1, point2, uv0, uv1, uv2);
+        return uv;
     }
 
     private class CapVert

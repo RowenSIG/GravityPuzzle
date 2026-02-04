@@ -1,6 +1,6 @@
+#define MERGE_VERTSx
 using UnityEngine;
 using System.Collections.Generic;
-using UnityEngine.UIElements;
 
 //AI CODE
 
@@ -82,11 +82,12 @@ public static class MeshIntersection
         return true;
     }
 
-    private static readonly float vertEpsilonSquared = (0.01f * 0.01f);
-    public static (List<int> tris, List<Vector3> verts) TidyMesh(List<int> tris, List<Vector3> verts)
+    private static readonly float vertEpsilonSquared = (0.001f * 0.001f);
+    public static (List<int> tris, List<Vector3> verts, List<Vector3> normals, List<Vector2> uvs) TidyMesh(List<int> tris, List<Vector3> verts, List<Vector3> normals, List<Vector2> uvs)
     {
-        Dictionary<int, int> remapVertInts = new();
 
+#if MERGE_VERTS
+        Dictionary<int, int> remapVertInts = new(verts.Count);
         //find alike verts:
         for(int i = 0 ; i < verts.Count; i ++)
         {
@@ -117,12 +118,11 @@ public static class MeshIntersection
             {
                 tris[i] = newtri;
             }
-        }
-
-      
+        }  
+#endif
 
         //and finally, don't want repeated faces:
-        var newTris = new List<int>();
+        var newTris = new List<int>(tris.Count);
 
         var numFaces = tris.Count / 3; 
         for(int i = 0; i < numFaces; i++)
@@ -157,7 +157,9 @@ public static class MeshIntersection
         }
 
         Dictionary<int, int> preserveVertInts = new();
-        var newVerts = new List<Vector3>();
+        var newVerts = new List<Vector3>(verts.Count);
+        var newNormals = new List<Vector3>(verts.Count);
+        var newUVs = new List<Vector2>(verts.Count);
         for(int i = 0 ; i < verts.Count; i++)
         {
             if(newTris.Contains(i) == false)
@@ -165,6 +167,8 @@ public static class MeshIntersection
 
             preserveVertInts.Add(i, newVerts.Count);
             newVerts.Add(verts[i]);
+            newNormals.Add(normals[i]);
+            newUVs.Add(uvs[i]);
         }
 
         //update any tri which was pointed at a vert to point at that same vert but its new point in the list
@@ -175,7 +179,7 @@ public static class MeshIntersection
                 newTris[i] = newIndex;
         }
 
-        return (newTris, newVerts);
+        return (newTris, newVerts, newNormals, newUVs);
     }
 
     private static bool Same(int tri0, int tri1, int tri2, int otherTri0, int otherTri1, int otherTri2)
@@ -191,6 +195,31 @@ public static class MeshIntersection
         if(tri0 == otherTri2 && tri1 == otherTri0 && tri2 == otherTri1)
             return true;
         return false;
+    }
+
+    public static Vector2 GetUV(Vector3 point, Vector3 vert0, Vector3 vert1, Vector3 vert2, Vector2 uv0, Vector2 uv1, Vector2 uv2)
+    {
+        // Compute vectors
+    Vector3 v0 = vert1 - vert0;
+    Vector3 v1 = vert2 - vert0;
+    Vector3 v2 = point - vert0;
+
+    // Compute dot products
+    float d00 = Vector3.Dot(v0, v0);
+    float d01 = Vector3.Dot(v0, v1);
+    float d11 = Vector3.Dot(v1, v1);
+    float d20 = Vector3.Dot(v2, v0);
+    float d21 = Vector3.Dot(v2, v1);
+
+    // Compute barycentric coordinates
+    float denom = d00 * d11 - d01 * d01;
+    float v = (d11 * d20 - d01 * d21) / denom;
+    float w = (d00 * d21 - d01 * d20) / denom;
+    float u = 1f - v - w;
+
+    // Interpolate UV
+    return u * uv0 + v * uv1 + w * uv2;
+
     }
 }
 
