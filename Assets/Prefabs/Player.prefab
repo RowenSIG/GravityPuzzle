@@ -229,6 +229,9 @@ MonoBehaviour:
   width: 4
   height: 0.1
   depth: 8
+  separateCutParts: 1
+  planeRotation: 0
+  planeRotationSpeed: 45
 --- !u!1 &655829372726506928
 GameObject:
   m_ObjectHideFlags: 0

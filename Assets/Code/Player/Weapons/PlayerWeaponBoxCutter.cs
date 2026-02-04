@@ -1,7 +1,6 @@
 using System.Collections.Generic;
-using Mono.Cecil;
-using NUnit.Framework.Constraints;
 using UnityEngine;
+using UnityEngine.InputSystem;
 
 public class PlayerWeaponBoxCutter : PlayerWeapon
 {
@@ -19,8 +18,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         public int tri0;
         public int tri1;
         public int tri2;
-
-        public ePlane plane;
 
         public Plane unityPlane;
 
@@ -53,6 +50,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
     public bool separateCutParts = true;
 
+    public float planeRotation = 0f;
+    public float planeRotationSpeed = 45f;
+
     private bool canFire = false;
     private bool CanFire
     {
@@ -74,6 +74,15 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         if(rightFire == false)
         {
             canFire = true;
+        }
+
+        if(Keyboard.current.rKey.isPressed)
+        {
+            planeRotation += planeRotationSpeed * Time.deltaTime;   
+        }
+        if(Keyboard.current.tKey.isPressed)
+        {
+            planeRotation -= planeRotationSpeed * Time.deltaTime;   
         }
     }
 
@@ -139,15 +148,12 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         triBuffer.Clear();
         triBuffer2.Clear();
 
-        // CastPlaneAgainstMesh(ePlane.TOP, mesh, meshWorldMatrix, meshLocalMatrix);
-        CastPlaneAgainstMesh(ePlane.BOTTOM, mesh, meshWorldMatrix, meshLocalMatrix);
-        // CastPlaneAgainstMesh(ePlane.LEFT, mesh, meshWorldMatrix, meshLocalMatrix);
-        // CastPlaneAgainstMesh(ePlane.RIGHT, mesh, meshWorldMatrix, meshLocalMatrix);
+        CastPlaneAgainstMesh(mesh, meshWorldMatrix, meshLocalMatrix);
     }
 
-    private void CastPlaneAgainstMesh(ePlane plane, Mesh mesh, Matrix4x4 meshWorldMatrix, Matrix4x4 meshLocalMatrix)
+    private void CastPlaneAgainstMesh(Mesh mesh, Matrix4x4 meshWorldMatrix, Matrix4x4 meshLocalMatrix)
     {
-        var worldPlane = GetPlane(plane);
+        var worldPlane = GetPlane();
         var localBackA = meshWorldMatrix.MultiplyPoint3x4(worldPlane.backA);
         var localBackb = meshWorldMatrix.MultiplyPoint3x4(worldPlane.backB);
         var localFrontA = meshWorldMatrix.MultiplyPoint3x4(worldPlane.frontA);
@@ -203,7 +209,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                     triCut.tri0 = tri0;
                     triCut.tri1 = tri1;
                     triCut.tri2 = tri2;
-                    triCut.plane = plane;
                     triCut.unityPlane = new Plane(point0, point1, point2);
                     triCut.cutPlane = new Plane(localBackA, localFrontB, localBackb);
 
@@ -308,11 +313,11 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             var worldPoint0 = localToWorldMatrix.MultiplyPoint3x4(point0);
             var worldPoint1 = localToWorldMatrix.MultiplyPoint3x4(point1);
             var worldPoint2 = localToWorldMatrix.MultiplyPoint3x4(point2);
-            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, triCut.plane);
-            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, triCut.plane);
-            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, triCut.plane);
+            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0);
+            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1);
+            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2);
             
-            Log($"Plane [{triCut.plane}] vert check: 0[{point0OnCutSideOfPlane}] 1[{point1OnCutSideOfPlane}] 2[{point2OnCutSideOfPlane}]");
+            Log($"Plane vert check: 0[{point0OnCutSideOfPlane}] 1[{point1OnCutSideOfPlane}] 2[{point2OnCutSideOfPlane}]");
 
           
             //we're adding 2 new verts
@@ -408,9 +413,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             var worldPoint1 = localToWorldMatrix.MultiplyPoint3x4(point1);
             var worldPoint2 = localToWorldMatrix.MultiplyPoint3x4(point2);
             
-            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, ePlane.BOTTOM);
-            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, ePlane.BOTTOM);
-            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, ePlane.BOTTOM);
+            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0);
+            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1);
+            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2);
 
             if(point0OnCutSideOfPlane && point1OnCutSideOfPlane && point2OnCutSideOfPlane)
             {
@@ -420,36 +425,34 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                 triBuffer[triIndex2] = 0;
             }
         }
-        
+
+        if (newTrisAdded.Count <= 0)
+            return;
         //we have added a bunch of new verts. 
         //can we stitch them together?
         var newTris = new List<int>(newTrisAdded);
-        var limitPlane = GetLocalUnityPlane(ePlane.BOTTOM, localToWorldMatrix);
+        var limitPlane = GetLocalUnityPlane(localToWorldMatrix);
         BuildCap(newTris, limitPlane, triBuffer, true);
-      
+
         var result = MeshIntersection.TidyMesh(triBuffer, vertsBuffer, normalsBuffer, uvBuffer);
 
-        if(newTrisAdded.Count > 0)
-        {
-            mesh.Clear();
-            mesh.vertices = result.verts.ToArray();
-            mesh.triangles = result.tris.ToArray();
-            mesh.normals = result.normals.ToArray();
-            mesh.uv = result.uvs.ToArray();
-            mesh.RecalculateBounds();
-            // mesh.RecalculateNormals();
-            // mesh.RecalculateTangents();
-            
-            meshFilter.sharedMesh = mesh;
+        mesh.Clear();
+        mesh.vertices = result.verts.ToArray();
+        mesh.triangles = result.tris.ToArray();
+        mesh.normals = result.normals.ToArray();
+        mesh.uv = result.uvs.ToArray();
+        mesh.RecalculateBounds();
 
-            meshCollider.sharedMesh = null;
-            meshCollider.sharedMesh = mesh;
-            Physics.BakeMesh(mesh.GetInstanceID(), true);
-        }
+        meshFilter.sharedMesh = mesh;
+
+        meshCollider.sharedMesh = null;
+        meshCollider.sharedMesh = mesh;
+        Physics.BakeMesh(mesh.GetInstanceID(), true);
+
 
 
         numTriangles = triBuffer2.Count / 3;
-        for(int i = 0 ; i < numTriangles; i++)
+        for (int i = 0; i < numTriangles; i++)
         {
             var triIndex0 = 0 + i * 3;
             var triIndex1 = 1 + i * 3;
@@ -466,12 +469,12 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             var worldPoint0 = localToWorldMatrix.MultiplyPoint3x4(point0);
             var worldPoint1 = localToWorldMatrix.MultiplyPoint3x4(point1);
             var worldPoint2 = localToWorldMatrix.MultiplyPoint3x4(point2);
-            
-            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, ePlane.BOTTOM, true);
-            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, ePlane.BOTTOM, true);
-            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, ePlane.BOTTOM, true);
 
-            if(point0OnCutSideOfPlane && point1OnCutSideOfPlane && point2OnCutSideOfPlane)
+            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, true);
+            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, true);
+            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, true);
+
+            if (point0OnCutSideOfPlane && point1OnCutSideOfPlane && point2OnCutSideOfPlane)
             {
                 triBuffer2[triIndex0] = 0;
                 triBuffer2[triIndex1] = 0;
@@ -479,119 +482,96 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             }
         }
 
-        //Flip the normals now.
-        foreach(var tri in newTrisAdded)
+        //Flip the normals now - the chopped off part's cleaved faces need opposite normals
+        foreach (var tri in newTrisAdded)
         {
             normalsBuffer[tri] = -normalsBuffer[tri];
         }
-        
+
         newTris = new List<int>(newTrisAdded);
-        limitPlane = GetLocalUnityPlane(ePlane.BOTTOM, localToWorldMatrix);
+        limitPlane = GetLocalUnityPlane(localToWorldMatrix);
         BuildCap(newTris, limitPlane, triBuffer2, false);
-      
+
         result = MeshIntersection.TidyMesh(triBuffer2, vertsBuffer, normalsBuffer, uvBuffer);
-        
-        if(newTrisAdded.Count > 0)
+
+        var localCenterOfMassOffset = MeshIntersection.NormaliseVertsByCenterOfMass(result.verts);
+
+        var originalBody = meshCollider.attachedRigidbody;
+        var originalObject = originalBody != null ? originalBody.gameObject : meshCollider.gameObject;
+        var originalTransform = originalBody.transform;
+
+        mesh = Instantiate(mesh);
+        mesh.Clear();
+        mesh.vertices = result.verts.ToArray();
+        mesh.triangles = result.tris.ToArray();
+        mesh.normals = result.normals.ToArray();
+        mesh.uv = result.uvs.ToArray();
+        mesh.RecalculateBounds();
+
+        var clone = new GameObject();
+
+        var parentTransform = originalTransform;
+        if (separateCutParts)
         {
-            var originalBody = meshCollider.attachedRigidbody;
-            var originalObject = originalBody != null ? originalBody.gameObject : meshCollider.gameObject;
-            var originalTransform = originalBody.transform;
-
-            mesh = Instantiate(mesh);
-            mesh.Clear();
-            mesh.vertices = result.verts.ToArray();
-            mesh.triangles = result.tris.ToArray();
-            mesh.normals = result.normals.ToArray();
-            mesh.uv = result.uvs.ToArray();
-            mesh.RecalculateBounds();
-            // mesh.RecalculateNormals();
-            // mesh.RecalculateTangents();
-            
-            var clone = new GameObject();
-
-            var parentTransform = originalTransform;
-            if(separateCutParts)
-            {
-                parentTransform = originalTransform.parent;
-            }
-
-            clone.transform.SetParent( parentTransform, false );
-            clone.name = originalObject.name + "_clone";
-            clone.transform.localScale = originalTransform.localScale;
-            clone.transform.position = originalTransform.position;
-            clone.transform.localRotation = originalTransform.localRotation;
-
-            meshFilter = clone.AddComponent<MeshFilter>();
-            meshCollider = clone.AddComponent<MeshCollider>();
-            meshCollider.convex = true;
-            meshFilter.sharedMesh = mesh;
-
-            meshCollider.sharedMesh = null;
-            meshCollider.sharedMesh = mesh;
-
-            var rend = clone.AddComponent<MeshRenderer>();
-            rend.material = originalObject.GetComponent<MeshRenderer>().material;
-            Physics.BakeMesh(mesh.GetInstanceID(), true);
-
-            if (separateCutParts)
-            {
-                if (originalBody != null)
-                {
-                    var cloneBody = clone.AddComponent<Rigidbody>();
-                    cloneBody.mass = originalBody.mass;
-                    cloneBody.angularDamping = originalBody.angularDamping;
-                    cloneBody.linearDamping = originalBody.linearDamping;
-                    cloneBody.useGravity = true;
-                    cloneBody.automaticInertiaTensor = true;
-                    cloneBody.automaticCenterOfMass = true;
-                }
-            }
+            parentTransform = originalTransform.parent;
         }
 
+        clone.transform.SetParent(parentTransform, false);
+        clone.name = originalObject.name + "_clone";
+        clone.transform.localScale = originalTransform.localScale;
+        clone.transform.position = originalTransform.TransformPoint(localCenterOfMassOffset);
+        clone.transform.localRotation = originalTransform.localRotation;
+
+        meshFilter = clone.AddComponent<MeshFilter>();
+        meshCollider = clone.AddComponent<MeshCollider>();
+        meshCollider.convex = true;
+        meshFilter.sharedMesh = mesh;
+
+        meshCollider.sharedMesh = null;
+        meshCollider.sharedMesh = mesh;
+
+        var rend = clone.AddComponent<MeshRenderer>();
+        rend.material = originalObject.GetComponent<MeshRenderer>().material;
+        Physics.BakeMesh(mesh.GetInstanceID(), true);
+
+        if (separateCutParts)
+        {
+            if (originalBody != null)
+            {
+                var cloneBody = clone.AddComponent<Rigidbody>();
+                cloneBody.mass = originalBody.mass;
+                cloneBody.angularDamping = originalBody.angularDamping;
+                cloneBody.linearDamping = originalBody.linearDamping;
+                cloneBody.useGravity = true;
+                cloneBody.automaticInertiaTensor = true;
+                cloneBody.automaticCenterOfMass = true;
+            }
+        }
     }
 
-    private enum ePlane
-    {
-        TOP = 0,
-        LEFT = 1,
-        RIGHT = 2,
-        BOTTOM = 3,
-    }
-
-    private (Vector3 backA, Vector3 backB, Vector3 frontA, Vector3 frontB) GetPlane(ePlane plane)
+    private (Vector3 backA, Vector3 backB, Vector3 frontA, Vector3 frontB) GetPlane()
     {
         var source = player.PlayerCamera.transform;
 
         var forward = source.forward * depth ;
         var right = source.right * width / 2f;
-        var up = source.up * height / 2f;
+
+        var orientation = Quaternion.AngleAxis(planeRotation, forward);
+        right = orientation * right;
 
         var center = source.position ;
 
-        Vector3 tlb = center + up + (-right);// + (-forward);
-        Vector3 tlf = center + up + (-right) + forward;
-        Vector3 trb = center + up + right;// + (-forward);
-        Vector3 trf = center + up + right + forward;
+        Vector3 lb = center + (-right);// + (-forward);
+        Vector3 lf = center + (-right) + forward;
+        Vector3 rb = center + right;// + (-forward);
+        Vector3 rf = center + right + forward;
 
-        Vector3 blb = center + (-up) + (-right);// + (-forward);
-        Vector3 blf = center + (-up) + (-right) + forward;
-        Vector3 brb = center + (-up) + right;// + (-forward);
-        Vector3 brf = center + (-up) + right + forward;
-
-        switch(plane)
-        {
-            default: return default;
-
-            case ePlane.TOP: return (tlb, trb, tlf, trf);
-            case ePlane.BOTTOM: return (blb, brb, blf, brf);
-            case ePlane.LEFT: return (tlb, blb, tlf, blf);
-            case ePlane.RIGHT: return (trb, brb, trf, brf);
-        }
+        return (lb, rb, lf, rf);
     }
 
-    private Plane GetLocalUnityPlane(ePlane plane, Matrix4x4 localToWorldMatrix)
+    private Plane GetLocalUnityPlane(Matrix4x4 localToWorldMatrix)
     {
-        var worldPlane = GetPlane(plane);
+        var worldPlane = GetPlane();
 
         var worldToLocalMatrix = localToWorldMatrix.inverse;
         var localBackA = worldToLocalMatrix.MultiplyPoint( worldPlane.backA );
@@ -601,22 +581,14 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         return localPlane;
     }
 
-    private bool VertPositionedOnCutSideOfPlane(Vector3 worldVert, ePlane plane, bool flip = false)
+    private bool VertPositionedOnCutSideOfPlane(Vector3 worldVert, bool flip = false)
     {
 
         //we need to get our plane 'normal' and get the dot against the localVert 
-        var planeVerts = GetPlane(plane);
+        var planeVerts = GetPlane();
         var myPlane = new Plane(planeVerts.backA, planeVerts.frontA, planeVerts.frontB);
 
-        switch(plane)
-        {
-            default:
-            case ePlane.TOP: return myPlane.GetSide(worldVert) == flip;
-            case ePlane.RIGHT: return myPlane.GetSide(worldVert) == flip;
-
-            case ePlane.BOTTOM: return myPlane.GetSide(worldVert) != flip;
-            case ePlane.LEFT: return myPlane.GetSide(worldVert) != flip;
-        }
+        return myPlane.GetSide(worldVert) != flip;
     }
 
     private void CaptureMatchedWindingPlane(int tri0, int tri1, int tri2, Plane referencePlane, List<int> triBuffer)
@@ -726,15 +698,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         var pointSize = Vector3.one * 0.05f;
         Gizmos.color = Color.green;
 
-        var topPlane = GetPlane(ePlane.TOP);
-        Gizmos.DrawCube(topPlane.backA, pointSize);
-        Gizmos.DrawCube(topPlane.backB, pointSize);
-        Gizmos.DrawCube(topPlane.frontA, pointSize);
-        Gizmos.DrawCube(topPlane.frontB, pointSize);
-        Gizmos.DrawLine( topPlane.backA, topPlane.frontA );
-        Gizmos.DrawLine( topPlane.backB, topPlane.frontB );
+       
 
-        var bottomPlane = GetPlane(ePlane.BOTTOM);
+        var bottomPlane = GetPlane();
         Gizmos.DrawCube(bottomPlane.backA, pointSize);
         Gizmos.DrawCube(bottomPlane.backB, pointSize);
         Gizmos.DrawCube(bottomPlane.frontA, pointSize);
@@ -748,12 +714,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             Gizmos.DrawCube(lastFrameCastPoint, pointSize * 2);
         }
 
-        // Gizmos.color = Color.yellow;
-        // var orig = Gizmos.matrix;
-        // Gizmos.matrix = transform.localToWorldMatrix;
-        // Gizmos.DrawWireCube(localBoxBounds.center, localBoxBounds.size * 0.95f);
-        // Gizmos.DrawWireCube(localBoxBounds.center, localBoxBounds.size * 0.98f);
-        // Gizmos.matrix = orig;
       
     }
 

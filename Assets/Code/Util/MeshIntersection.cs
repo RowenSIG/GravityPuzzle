@@ -185,14 +185,14 @@ public static class MeshIntersection
     private static bool Same(int tri0, int tri1, int tri2, int otherTri0, int otherTri1, int otherTri2)
     {
         //can't be a proper face if two tris are the same
-        if(tri0 == tri1 || tri1 == tri2 || tri2 == tri0)
+        if (tri0 == tri1 || tri1 == tri2 || tri2 == tri0)
             return true;
 
-        if(tri0 == otherTri0 && tri1 == otherTri1 && tri2 == otherTri2)
+        if (tri0 == otherTri0 && tri1 == otherTri1 && tri2 == otherTri2)
             return true;
-        if(tri0 == otherTri1 && tri1 == otherTri2 && tri2 == otherTri0)
+        if (tri0 == otherTri1 && tri1 == otherTri2 && tri2 == otherTri0)
             return true;
-        if(tri0 == otherTri2 && tri1 == otherTri0 && tri2 == otherTri1)
+        if (tri0 == otherTri2 && tri1 == otherTri0 && tri2 == otherTri1)
             return true;
         return false;
     }
@@ -200,26 +200,42 @@ public static class MeshIntersection
     public static Vector2 GetUV(Vector3 point, Vector3 vert0, Vector3 vert1, Vector3 vert2, Vector2 uv0, Vector2 uv1, Vector2 uv2)
     {
         // Compute vectors
-    Vector3 v0 = vert1 - vert0;
-    Vector3 v1 = vert2 - vert0;
-    Vector3 v2 = point - vert0;
+        Vector3 v0 = vert1 - vert0;
+        Vector3 v1 = vert2 - vert0;
+        Vector3 v2 = point - vert0;
 
-    // Compute dot products
-    float d00 = Vector3.Dot(v0, v0);
-    float d01 = Vector3.Dot(v0, v1);
-    float d11 = Vector3.Dot(v1, v1);
-    float d20 = Vector3.Dot(v2, v0);
-    float d21 = Vector3.Dot(v2, v1);
+        // Compute dot products
+        float d00 = Vector3.Dot(v0, v0);
+        float d01 = Vector3.Dot(v0, v1);
+        float d11 = Vector3.Dot(v1, v1);
+        float d20 = Vector3.Dot(v2, v0);
+        float d21 = Vector3.Dot(v2, v1);
 
-    // Compute barycentric coordinates
-    float denom = d00 * d11 - d01 * d01;
-    float v = (d11 * d20 - d01 * d21) / denom;
-    float w = (d00 * d21 - d01 * d20) / denom;
-    float u = 1f - v - w;
+        // Compute barycentric coordinates
+        float denom = d00 * d11 - d01 * d01;
+        float v = (d11 * d20 - d01 * d21) / denom;
+        float w = (d00 * d21 - d01 * d20) / denom;
+        float u = 1f - v - w;
 
-    // Interpolate UV
-    return u * uv0 + v * uv1 + w * uv2;
+        // Interpolate UV
+        return u * uv0 + v * uv1 + w * uv2;
 
+    }
+
+    public static Vector3 NormaliseVertsByCenterOfMass(List<Vector3> verts)
+    {
+        //simple right? get center.. that's it
+        Vector3 total = Vector3.zero;
+        foreach(var vert in verts)
+        {
+            total += vert;
+        }
+        var offset = total / verts.Count;
+        for(int i = 0 ; i < verts.Count; i++)
+        {
+            verts[i] = verts[i] - offset;
+        }
+        return offset;
     }
 }
 
