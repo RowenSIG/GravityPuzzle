@@ -228,10 +228,11 @@ MonoBehaviour:
   boxCenterTransform: {fileID: 1353075241068098058}
   width: 4
   height: 0.1
-  depth: 8
+  depth: 3
   separateCutParts: 1
   planeRotation: 0
   planeRotationSpeed: 45
+  cutOnlyNearest: 0
 --- !u!1 &655829372726506928
 GameObject:
   m_ObjectHideFlags: 0

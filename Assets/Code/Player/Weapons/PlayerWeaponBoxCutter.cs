@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -9,6 +10,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
     private struct TriCutPoint
     {
+        public Collider collider;
         public int subMesh;
 
         public int triIndex0;
@@ -28,7 +30,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
         public int pointCount;
     }
-    private Collider currentTargetCollider = null;
 
     private List<Vector3> lastFrameCastPoints = new(32);
     private List<TriCutPoint> lastFrameTriCutPoints = new(64);
@@ -52,6 +53,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
     public float planeRotation = 0f;
     public float planeRotationSpeed = 45f;
+
+    public bool cutOnlyNearest;
 
     private bool canFire = false;
     private bool CanFire
@@ -104,32 +107,44 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
         if(numHits > 0)
         {
-            float nearestDist = Mathf.Infinity;
-            RaycastHit nearestHit = default;
-            //find nearest:
-            for(int i = 0 ; i < numHits; i++)
+
+            if (cutOnlyNearest)
             {
-                var hit = castHitBuffer[i];
-                var delta = hit.point - transform.position;
-                if(delta.sqrMagnitude < nearestDist)
+                float nearestDist = Mathf.Infinity;
+                RaycastHit nearestHit = default;
+                //find nearest:
+                for (int i = 0; i < numHits; i++)
                 {
-                    nearestDist = delta.sqrMagnitude;
-                    nearestHit = hit;
+                    var hit = castHitBuffer[i];
+                    var delta = hit.point - transform.position;
+                    if (delta.sqrMagnitude < nearestDist)
+                    {
+                        nearestDist = delta.sqrMagnitude;
+                        nearestHit = hit;
+                    }
+                }
+
+                //then we want to build our 'planes' for each of our forward pointing edges
+                var collider = nearestHit.collider;
+                var meshFilter = collider.GetComponent<MeshFilter>();
+                if (meshFilter != null)
+                {
+                    CastAllPlanesAgainstMesh(collider, meshFilter);
                 }
             }
-
-            //then we want to build our 'planes' for each of our forward pointing edges
-            var collider = nearestHit.collider;
-            currentTargetCollider = collider;
-            var meshFilter = collider.GetComponent<MeshFilter>();
-            if(meshFilter != null)
+            else
             {
-                CastAllPlanesAgainstMesh(meshFilter);
+                for (int i = 0; i < numHits; i++)
+                {
+                    var hit = castHitBuffer[i];
+                    var collider = hit.collider;
+                    var meshFilter = collider.GetComponent<MeshFilter>();
+                    if (meshFilter != null)
+                    {
+                        CastAllPlanesAgainstMesh(collider, meshFilter);
+                    }
+                }
             }
-        }
-        else
-        {
-            currentTargetCollider = null;
         }
 
         var localCenter = transform.InverseTransformPoint(player.PlayerCamera.transform.position);
@@ -138,20 +153,40 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         localBoxBounds = new Bounds(localCenter, localSize);
     }
 
-    private void CastAllPlanesAgainstMesh(MeshFilter meshFilter)
+    private void CastAllPlanesAgainstMesh(Collider collider, MeshFilter meshFilter)
     {
         var meshWorldMatrix = meshFilter.transform.worldToLocalMatrix;
         var meshLocalMatrix = meshFilter.transform.localToWorldMatrix;
         var mesh = meshFilter.mesh;
 
+        var minDimensionSize = 0.25f;
+        var bounds = mesh.bounds;
+        var size = meshFilter.transform.TransformVector(bounds.size);
+        size.x = Mathf.Abs(size.x);
+        size.y = Mathf.Abs(size.y);
+        size.z = Mathf.Abs(size.z);
+        if(size.x < minDimensionSize || size.y < minDimensionSize || size.z < minDimensionSize)
+        {
+            //Debug.Log($"MeshDimensionTooLow - skip. [{meshFilter.name}]");
+            return;
+        }
+        var minVolume = (0.33f * 0.33f * 0.33f);
+        if(size.x * size.y * size.z < minVolume)
+        {
+            Debug.Log($"MeshVolumeTooLow - skip. [{meshFilter.name}]");
+            return;
+        }
+
         vertsBuffer.Clear();
         triBuffer.Clear();
         triBuffer2.Clear();
+        normalsBuffer.Clear();
+        uvBuffer.Clear();
 
-        CastPlaneAgainstMesh(mesh, meshWorldMatrix, meshLocalMatrix);
+        CastPlaneAgainstMesh(collider, mesh, meshWorldMatrix, meshLocalMatrix);
     }
 
-    private void CastPlaneAgainstMesh(Mesh mesh, Matrix4x4 meshWorldMatrix, Matrix4x4 meshLocalMatrix)
+    private void CastPlaneAgainstMesh(Collider collider, Mesh mesh, Matrix4x4 meshWorldMatrix, Matrix4x4 meshLocalMatrix)
     {
         var worldPlane = GetPlane();
         var localBackA = meshWorldMatrix.MultiplyPoint3x4(worldPlane.backA);
@@ -202,6 +237,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                     }
 
                     var triCut = new TriCutPoint();
+                    triCut.collider = collider;
                     triCut.subMesh = i;
                     triCut.triIndex0 = triIndex0;
                     triCut.triIndex1 = triIndex1;
@@ -228,11 +264,24 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
     {
         canFire = false;
 
+        var dic = new Dictionary<Collider, List<TriCutPoint>>(lastFrameTriCutPoints.Count);
         
-        var meshCollider = TryConvertColliderIntoMesh(currentTargetCollider);
-        currentTargetCollider = meshCollider;
+        foreach(var cut in lastFrameTriCutPoints)
+        {
+            if(dic.TryGetValue(cut.collider, out var list) == false)
+            {
+                list = new List<TriCutPoint>();
+                dic[cut.collider] = list;
+            }
+            list.Add(cut);
+        }
 
-        TryCuttingMeshCollider(meshCollider);
+        foreach(var key in dic.Keys)
+        {
+            var meshCollider = TryConvertColliderIntoMesh(key);
+
+            TryCuttingMeshCollider(meshCollider, dic[key]);
+        }
     }
 
     private MeshCollider TryConvertColliderIntoMesh(Collider target)
@@ -277,7 +326,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         }
     }
 
-    private void TryCuttingMeshCollider(MeshCollider meshCollider)
+    private void TryCuttingMeshCollider(MeshCollider meshCollider, List<TriCutPoint> triCutPoints)
     {
         //this is the bit where it gets serious
         HashSet<int> newTrisAdded = new(512);
@@ -287,11 +336,22 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         var mesh = meshFilter.sharedMesh;
         var localToWorldMatrix = meshCollider.transform.localToWorldMatrix;
 
+        int lastSubMeshGot = -1;
         //we have a list of tricuts from our raycasts. 
-        foreach(var triCut in lastFrameTriCutPoints)
+        foreach(var triCut in triCutPoints)
         {
             if(triCut.pointCount != 2)
                 continue;
+
+            if(triCut.subMesh != lastSubMeshGot)
+            {
+                mesh.GetTriangles(triBuffer, triCut.subMesh);
+                mesh.GetTriangles(triBuffer2, triCut.subMesh);
+                mesh.GetVertices(vertsBuffer);
+                mesh.GetNormals(normalsBuffer);
+                mesh.GetUVs(0, uvBuffer);
+                lastSubMeshGot = triCut.subMesh;
+            }
 
             //regardless, we remove the old tri
             triIndicesRemoved.Add(triCut.triIndex0);
@@ -498,7 +558,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
         var originalBody = meshCollider.attachedRigidbody;
         var originalObject = originalBody != null ? originalBody.gameObject : meshCollider.gameObject;
-        var originalTransform = originalBody.transform;
+        var originalTransform = originalObject.transform;
 
         mesh = Instantiate(mesh);
         mesh.Clear();
@@ -551,6 +611,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
     private (Vector3 backA, Vector3 backB, Vector3 frontA, Vector3 frontB) GetPlane()
     {
+        var depth = 100f;
+        var width = 100f;
+
         var source = player.PlayerCamera.transform;
 
         var forward = source.forward * depth ;
