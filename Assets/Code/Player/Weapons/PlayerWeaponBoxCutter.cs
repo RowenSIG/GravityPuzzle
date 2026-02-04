@@ -698,6 +698,11 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
     private void BuildCap(List<int> tris, Plane referencePlane, List<int> triBuffer, bool flip)
     {
+        BuildCapFromClosedSet(tris, referencePlane, triBuffer, flip);
+    }
+
+    private void BuildCapFromClosedSet(List<int> tris, Plane referencePlane, List<int> triBuffer, bool flip)
+    {
         var capVerts = new List<CapVert>();
         foreach(var tri in tris)
         {
