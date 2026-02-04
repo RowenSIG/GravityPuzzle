@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -110,22 +109,14 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
             if (cutOnlyNearest)
             {
-                float nearestDist = Mathf.Infinity;
-                RaycastHit nearestHit = default;
-                //find nearest:
-                for (int i = 0; i < numHits; i++)
-                {
-                    var hit = castHitBuffer[i];
-                    var delta = hit.point - transform.position;
-                    if (delta.sqrMagnitude < nearestDist)
-                    {
-                        nearestDist = delta.sqrMagnitude;
-                        nearestHit = hit;
-                    }
-                }
+                //using a simple raycast, find the thing we're actually pointing at
+                var rayHit = Physics.Raycast(rayOrigin, ray.direction, out var hitInfo, depth, layerMask);
+
+                if(rayHit == false)
+                    return;
 
                 //then we want to build our 'planes' for each of our forward pointing edges
-                var collider = nearestHit.collider;
+                var collider = hitInfo.collider;
                 var meshFilter = collider.GetComponent<MeshFilter>();
                 if (meshFilter != null)
                 {
@@ -159,23 +150,23 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         var meshLocalMatrix = meshFilter.transform.localToWorldMatrix;
         var mesh = meshFilter.mesh;
 
-        var minDimensionSize = 0.22f;
-        var bounds = mesh.bounds;
-        var size = meshFilter.transform.TransformVector(bounds.size);
-        size.x = Mathf.Abs(size.x);
-        size.y = Mathf.Abs(size.y);
-        size.z = Mathf.Abs(size.z);
-        if(size.x < minDimensionSize || size.y < minDimensionSize || size.z < minDimensionSize)
-        {
-            //Debug.Log($"MeshDimensionTooLow - skip. [{meshFilter.name}]");
-            return;
-        }
-        var minVolume = (0.25f * 0.25f * 0.25f);
-        if(size.x * size.y * size.z < minVolume)
-        {
-            Debug.Log($"MeshVolumeTooLow - skip. [{meshFilter.name}]");
-            return;
-        }
+        // var minDimensionSize = 0.22f;
+        // var bounds = mesh.bounds;
+        // var size = meshFilter.transform.TransformVector(bounds.size);
+        // size.x = Mathf.Abs(size.x);
+        // size.y = Mathf.Abs(size.y);
+        // size.z = Mathf.Abs(size.z);
+        // if(size.x < minDimensionSize || size.y < minDimensionSize || size.z < minDimensionSize)
+        // {
+        //     //Debug.Log($"MeshDimensionTooLow - skip. [{meshFilter.name}]");
+        //     return;
+        // }
+        // var minVolume = (0.25f * 0.25f * 0.25f);
+        // if(size.x * size.y * size.z < minVolume)
+        // {
+        //     Debug.Log($"MeshVolumeTooLow - skip. [{meshFilter.name}]");
+        //     return;
+        // }
 
         vertsBuffer.Clear();
         triBuffer.Clear();
@@ -377,7 +368,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1);
             var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2);
             
-            Log($"Plane vert check: 0[{point0OnCutSideOfPlane}] 1[{point1OnCutSideOfPlane}] 2[{point2OnCutSideOfPlane}]");
+           // Log($"Plane vert check: 0[{point0OnCutSideOfPlane}] 1[{point1OnCutSideOfPlane}] 2[{point2OnCutSideOfPlane}]");
 
           
             //we're adding 2 new verts
@@ -554,7 +545,11 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
         result = MeshIntersection.TidyMesh(triBuffer2, vertsBuffer, normalsBuffer, uvBuffer);
 
-        var localCenterOfMassOffset = MeshIntersection.NormaliseVertsByCenterOfMass(result.verts);
+        var localCenterOfMassOffset = Vector3.zero;
+        if(separateCutParts)
+        {
+            localCenterOfMassOffset = MeshIntersection.NormaliseVertsByCenterOfMass(result.verts);
+        }
 
         var originalBody = meshCollider.attachedRigidbody;
         var originalObject = originalBody != null ? originalBody.gameObject : meshCollider.gameObject;
@@ -569,19 +564,23 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         mesh.RecalculateBounds();
 
         var clone = new GameObject();
+        clone.name = originalObject.name + "_clone";
 
-        var parentTransform = originalTransform;
         if (separateCutParts)
         {
-            parentTransform = originalTransform.parent;
+            clone.transform.SetParent(originalTransform.parent, false);
+            clone.transform.localScale = originalTransform.localScale;
+            clone.transform.position = originalTransform.TransformPoint(localCenterOfMassOffset);
+            clone.transform.localRotation = originalTransform.localRotation;
         }
-
-        clone.transform.SetParent(parentTransform, false);
-        clone.name = originalObject.name + "_clone";
-        clone.transform.localScale = originalTransform.localScale;
-        clone.transform.position = originalTransform.TransformPoint(localCenterOfMassOffset);
-        clone.transform.localRotation = originalTransform.localRotation;
-
+        else
+        {
+            clone.transform.SetParent(originalTransform, false);  
+            clone.transform.localPosition = Vector3.zero;
+            clone.transform.localRotation = Quaternion.identity;
+            clone.transform.localScale = Vector3.one;
+        }
+        
         meshFilter = clone.AddComponent<MeshFilter>();
         meshCollider = clone.AddComponent<MeshCollider>();
         meshCollider.convex = true;
@@ -764,17 +763,19 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
        
 
         var bottomPlane = GetPlane();
-        Gizmos.DrawCube(bottomPlane.backA, pointSize);
-        Gizmos.DrawCube(bottomPlane.backB, pointSize);
-        Gizmos.DrawCube(bottomPlane.frontA, pointSize);
-        Gizmos.DrawCube(bottomPlane.frontB, pointSize);
-        Gizmos.DrawLine( bottomPlane.backA, bottomPlane.frontA );
-        Gizmos.DrawLine( bottomPlane.backB, bottomPlane.frontB );
+        Gizmos.DrawLine( bottomPlane.frontA, bottomPlane.frontB );
+        // Gizmos.DrawCube(bottomPlane.backA, pointSize);
+        // Gizmos.DrawCube(bottomPlane.backB, pointSize);
+        // Gizmos.DrawCube(bottomPlane.frontA, pointSize);
+        // Gizmos.DrawCube(bottomPlane.frontB, pointSize);
+        // Gizmos.DrawLine( bottomPlane.backA, bottomPlane.frontA );
+        // Gizmos.DrawLine( bottomPlane.backB, bottomPlane.frontB );
      
         Gizmos.color = Color.red;
-        foreach(var lastFrameCastPoint in lastFrameCastPoints)
+        for(int i = 0; i < lastFrameCastPoints.Count - 1; i++)
         {
-            Gizmos.DrawCube(lastFrameCastPoint, pointSize * 2);
+            Gizmos.DrawLine( lastFrameCastPoints[i], lastFrameCastPoints[i + 1] );
+            //Gizmos.DrawCube(lastFrameCastPoint, pointSize * 2);
         }
 
       
