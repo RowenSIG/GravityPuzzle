@@ -438,6 +438,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             uvBuffer.Add(newUV0);
             uvBuffer.Add(newUV1);
 
+            //my new tris need to be added more carefully. concave meshes can end up making our verts connect across gaps
+            //my idea is something like rasterization, we pass through faces to get here and count them. but it won't work.
             newTrisAdded.Add(capTri0);
             newTrisAdded.Add(capTri1);
         }
@@ -696,12 +698,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         public float rotationalAngle;
     }
 
-    private void BuildCap(List<int> tris, Plane referencePlane, List<int> triBuffer, bool flip)
-    {
-        BuildCapFromClosedSet(tris, referencePlane, triBuffer, flip);
-    }
 
-    private void BuildCapFromClosedSet(List<int> tris, Plane referencePlane, List<int> triBuffer, bool flip)
+    private void BuildCap(List<int> tris, Plane referencePlane, List<int> triBuffer, bool flip)
     {
         var capVerts = new List<CapVert>();
         foreach(var tri in tris)
@@ -751,6 +749,113 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         }
     }
 
+    private class CapVertPair
+    {
+        public int tri;
+
+        public Vector3 activeVert;
+        public Vector3 inactiveVert;
+    }
+
+    private void BuildCap2(List<int> tris, Plane referencePlane, List<int> triBuffer, bool flip)
+    {
+       
+
+        Log($"BuildCap2 - tris count [{tris.Count}]");
+
+        List<CapVertPair> capVerts3D = new List<CapVertPair>();
+        var firstPair = new CapVertPair()
+        {
+            tri = tris[0],
+            activeVert = vertsBuffer[tris[0]],
+            inactiveVert = vertsBuffer[tris[1]] 
+        };
+        capVerts3D.Add(firstPair);
+
+        int loopLimit = 1000;
+        var countExpected = tris.Count / 2;
+        while(capVerts3D.Count < countExpected && loopLimit-- > 0)
+        {
+            var lastAddedVert = capVerts3D[capVerts3D.Count - 1];
+
+            for(int i = 0 ; i < tris.Count; i+=2)
+            {
+                if( tris[i] == lastAddedVert.tri || tris[i + 1] == lastAddedVert.tri)
+                    continue;
+
+                var tri0 = tris[i];
+                var tri1 = tris[i + 1];
+
+                var vert0 = vertsBuffer[tri0];
+                var vert1 = vertsBuffer[tri1];
+
+                if(Vector3.Distance(vert0, lastAddedVert.inactiveVert) < 0.001f)
+                {
+                    var newPair = new CapVertPair() { tri = tri0 , activeVert = vert0, inactiveVert = vert1 };
+                    capVerts3D.Add(newPair);
+                    break;
+                }
+                else if(Vector3.Distance(vert1, lastAddedVert.inactiveVert) < 0.001f)
+                {
+                    var newPair = new CapVertPair() { tri = tri1 , activeVert = vert1, inactiveVert = vert0 };
+                    capVerts3D.Add(newPair);
+                    break;
+                }
+            }
+        }
+
+
+        if(loopLimit <= 0)
+        {
+            Log($"Loop limit hit when building cap - something went wrong. Expected to find [{countExpected}] verts, but only found [{capVerts3D.Count}]");
+            return;
+        }
+        
+        //find a point in plane:
+        Vector3 origin = -referencePlane.normal * referencePlane.distance;
+        //create a pair of axes for decomposing each point:
+        Vector3 xAxis = Vector3.Cross(referencePlane.normal, Vector3.up);
+        if (xAxis.sqrMagnitude < 0.001f)
+            xAxis = Vector3.Cross(referencePlane.normal, Vector3.right);
+
+        xAxis.Normalize();
+        Vector3 yAxis = Vector3.Cross(referencePlane.normal, xAxis);
+
+        var capVerts2D = new List<Vector2>();
+        foreach(var capVert3D in capVerts3D)
+        {
+            var vertToOrigin = capVert3D.activeVert - origin;
+            var x = Vector3.Dot(vertToOrigin, xAxis);
+            var y = Vector3.Dot(vertToOrigin, yAxis);
+            capVerts2D.Add( new Vector2(x,y) );
+        }
+
+        var area = MeshIntersection.ComputeSignedArea(capVerts2D);
+        bool areaFlip = area < 0;
+        if(areaFlip)
+        {
+            //we want a consistent winding order for our triangulation, so if it's negative we flip it:
+            capVerts2D.Reverse();
+        }
+
+        Log($"BuildCap2 - capVerts3D count [{capVerts3D.Count}] capVerts2D count [{capVerts2D.Count}]");
+        var triangulatedTris = MeshIntersection.TriangulateEarClipping(capVerts2D);
+
+
+        //i think XOR (exclusive or) 
+        if(flip ^ areaFlip)
+        {
+            triangulatedTris.Reverse();
+        }
+
+        for(int i = 0 ; i < triangulatedTris.Count; i++)
+        {
+            var index = triangulatedTris[i];
+            var capVert3D = capVerts3D[index];
+            triBuffer.Add(capVert3D.tri);
+        }
+        
+    }
     private void Log(string log)
     {
         Debug.Log($"[PlayerWeaponBoxCutter] {log}");
@@ -782,8 +887,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             Gizmos.DrawLine( lastFrameCastPoints[i], lastFrameCastPoints[i + 1] );
             //Gizmos.DrawCube(lastFrameCastPoint, pointSize * 2);
         }
-
-      
     }
 
 }

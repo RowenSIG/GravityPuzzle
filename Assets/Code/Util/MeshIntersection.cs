@@ -237,5 +237,118 @@ public static class MeshIntersection
         }
         return offset;
     }
+    public static List<int> TriangulateEarClipping(IList<Vector2> poly)
+    {
+        List<int> result = new List<int>();
+        int n = poly.Count;
+
+        if (n < 3)
+            return result;
+
+        // Working index list
+        List<int> V = new List<int>(n);
+        for (int i = 0; i < n; i++)
+            V.Add(i);
+
+        int guard = 0;
+
+        while (V.Count > 3 && guard < 5000)
+        {
+            guard++;
+            bool earFound = false;
+
+            for (int i = 0; i < V.Count; i++)
+            {
+                int prev = V[(i - 1 + V.Count) % V.Count];
+                int curr = V[i];
+                int next = V[(i + 1) % V.Count];
+
+                Vector2 a = poly[prev];
+                Vector2 b = poly[curr];
+                Vector2 c = poly[next];
+
+                // Must be convex
+                if (!IsConvex(a, b, c))
+                    continue;
+
+                // Check if any other point lies inside the triangle
+                bool containsPoint = false;
+                for (int j = 0; j < V.Count; j++)
+                {
+                    int vi = V[j];
+                    if (vi == prev || vi == curr || vi == next)
+                        continue;
+
+                    if (PointInTriangle(poly[vi], a, b, c))
+                    {
+                        containsPoint = true;
+                        break;
+                    }
+                }
+
+                if (containsPoint)
+                    continue;
+
+                // It's an ear
+                result.Add(prev);
+                result.Add(curr);
+                result.Add(next);
+
+                V.RemoveAt(i);
+                earFound = true;
+                break;
+            }
+
+            if (!earFound)
+            {
+                Debug.LogWarning("Ear clipping failed — polygon may be malformed");
+                break;
+            }
+        }
+
+        // Final triangle
+        if (V.Count == 3)
+        {
+            result.Add(V[0]);
+            result.Add(V[1]);
+            result.Add(V[2]);
+        }
+
+        return result;
+    }
+
+    static bool IsConvex(Vector2 a, Vector2 b, Vector2 c)
+    {
+        return Cross(b - a, c - b) > 0f; // CCW convex
+    }
+
+    static float Cross(Vector2 a, Vector2 b)
+    {
+        return a.x * b.y - a.y * b.x;
+    }
+
+    static bool PointInTriangle(Vector2 p, Vector2 a, Vector2 b, Vector2 c)
+    {
+        float area = Cross(b - a, c - a);
+        float s = Cross(c - a, p - a) / area;
+        float t = Cross(a - b, p - b) / area;
+        float u = 1 - s - t;
+        return s >= 0 && t >= 0 && u >= 0;
+    }
+
+    public static float ComputeSignedArea(IList<Vector2> poly)
+    {
+        float area = 0f;
+
+        for (int i = 0; i < poly.Count; i++)
+        {
+            Vector2 a = poly[i];
+            Vector2 b = poly[(i + 1) % poly.Count];
+
+            area += (a.x * b.y) - (b.x * a.y);
+        }
+
+        return area * 0.5f;
+    }
 }
 
