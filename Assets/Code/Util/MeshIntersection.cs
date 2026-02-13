@@ -99,7 +99,7 @@ public static class MeshIntersection
             {
                 if(remapVertInts.ContainsKey(j))
                     continue;
-                    
+                
                 var otherVert = verts[j];
                 var otherTri = j;
 
@@ -120,6 +120,8 @@ public static class MeshIntersection
             }
         }  
 #endif
+
+
 
         //and finally, don't want repeated faces:
         var newTris = new List<int>(tris.Count);
@@ -145,11 +147,22 @@ public static class MeshIntersection
                 var alreadyTri2 = tris[2 + j * 3];
 
                 if(Same(tri0, tri1, tri2, alreadyTri0, alreadyTri1, alreadyTri2))
+                {
                     duplicate = true;
+                    break;
+                }
             }
 
             if(duplicate == false)
             {
+                //check zero area:
+                var vert0 = verts[tri0];
+                var vert1 = verts[tri1];
+                var vert2 = verts[tri2];
+
+                if(Same(vert0, vert1, vert2))
+                    continue;
+
                 newTris.Add(tri0);
                 newTris.Add(tri1);
                 newTris.Add(tri2);
@@ -164,7 +177,7 @@ public static class MeshIntersection
         {
             if(newTris.Contains(i) == false)
                 continue;
-
+                
             preserveVertInts.Add(i, newVerts.Count);
             newVerts.Add(verts[i]);
             newNormals.Add(normals[i]);
@@ -194,6 +207,19 @@ public static class MeshIntersection
             return true;
         if (tri0 == otherTri2 && tri1 == otherTri0 && tri2 == otherTri1)
             return true;
+        return false;
+    }
+
+    public static bool Same(Vector3 vert0, Vector3 vert1, Vector3 vert2)
+    {
+        //for now:
+        if( (vert0 - vert1).sqrMagnitude < vertEpsilonSquared )
+                return true;
+        if( (vert1 - vert2).sqrMagnitude < vertEpsilonSquared )
+            return true;
+        if( (vert2 - vert0).sqrMagnitude < vertEpsilonSquared )
+            return true;
+
         return false;
     }
 
