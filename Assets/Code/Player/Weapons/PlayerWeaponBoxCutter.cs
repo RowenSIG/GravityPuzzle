@@ -1,8 +1,13 @@
-using System.Collections;
 using System.Collections.Generic;
-using UnityEditor.Rendering.LookDev;
 using UnityEngine;
 using UnityEngine.InputSystem;
+
+//need ability to orient picked up things.
+//need to be able to move ... smoothly
+//need for if i'm not pointing directly at a thing, for our plane cast to catch it
+//detect Detachment and make bodies
+//also eliminate bits which are too tiny. 
+
 
 public class PlayerWeaponBoxCutter : PlayerWeapon
 {
@@ -167,8 +172,27 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             var rayHit = Physics.Raycast(rayOrigin, ray.direction, out var hitInfo, depth, layerMask);
 
             if (rayHit == false)
-                return;
+            {
+                bool yesHit = false;
+                var nearestProx = 1000f;
+                for(int i = 0 ; i < numHits; i++)
+                {
+                    var hit = castHitBuffer[i];
+                    if(hit.collider.attachedRigidbody == null)
+                        continue;
 
+                    var dist = Vector3.Distance(hit.point, rayOrigin);
+                    if( dist < nearestProx )
+                    {
+                        nearestProx = dist;
+                        hitInfo = hit;
+                        yesHit = true;
+                    }
+                }
+
+                if(yesHit == false)
+                    return;
+            }
 
             var bodyHit = hitInfo.collider.attachedRigidbody;
             if (bodyHit != null)
@@ -758,8 +782,14 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         {
             case ePlane.BOTTOM: rotation = 0f;break;
             case ePlane.TOP: rotation = 180f;break;
-            case ePlane.LEFT: rotation = 270f;break;
-            case ePlane.RIGHT: rotation = 90f;break;
+            case ePlane.LEFT:
+             rotation = 270f;
+             up = source.up * width / 2f;
+            break;
+            case ePlane.RIGHT: 
+            rotation = 90f;
+             up = source.up * width / 2f;
+            break;
         }
 
         rotation += planeRotation;
