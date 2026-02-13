@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.UIElements;
 
 public class PlayerWeaponBoxCutter : PlayerWeapon
 {
@@ -20,6 +21,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         public int tri1;
         public int tri2;
 
+        public ePlane plane;
+
         public Plane unityPlane;
 
         public Plane cutPlane;
@@ -29,6 +32,34 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
         public int pointCount;
     }
+
+    private class CutResult
+    {
+        public GameObject cutCreatedObject;
+        public Transform cutCreatedParentTransform;
+        public Transform cutSourceTransform;
+        public Vector3 cutSourceLocalScale;
+        public Vector3 cutCreatedWorldPosition;
+        public Quaternion cutSourceLocalRotation;
+
+        public Rigidbody cutSourceRigidBody;
+
+        public ePlane cutPlane;
+
+        public float bodyMass; //calculate
+    }
+    
+    private enum ePlane
+    {
+        INVALID = 0,
+
+        BOTTOM = 10,
+        TOP = 20,
+        LEFT = 30, 
+        RIGHT = 40,
+    }
+
+    private List<CutResult> cuttingResults = new List<CutResult>();
 
     private List<Vector3> lastFrameCastPoints = new(32);
     private List<TriCutPoint> lastFrameTriCutPoints = new(64);
@@ -174,12 +205,12 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         normalsBuffer.Clear();
         uvBuffer.Clear();
 
-        CastPlaneAgainstMesh(collider, mesh, meshWorldMatrix, meshLocalMatrix);
+        CastPlaneAgainstMesh(collider, mesh, meshWorldMatrix, meshLocalMatrix, ePlane.BOTTOM);
     }
 
-    private void CastPlaneAgainstMesh(Collider collider, Mesh mesh, Matrix4x4 meshWorldMatrix, Matrix4x4 meshLocalMatrix)
+    private void CastPlaneAgainstMesh(Collider collider, Mesh mesh, Matrix4x4 meshWorldMatrix, Matrix4x4 meshLocalMatrix, ePlane plane)
     {
-        var worldPlane = GetPlane();
+        var worldPlane = GetPlane(plane);
         var localBackA = meshWorldMatrix.MultiplyPoint3x4(worldPlane.backA);
         var localBackb = meshWorldMatrix.MultiplyPoint3x4(worldPlane.backB);
         var localFrontA = meshWorldMatrix.MultiplyPoint3x4(worldPlane.frontA);
@@ -238,9 +269,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                     triCut.tri2 = tri2;
                     triCut.unityPlane = new Plane(point0, point1, point2);
                     triCut.cutPlane = new Plane(localBackA, localFrontB, localBackb);
+                    triCut.plane = plane;
 
-                    triCut.pointCount = 2;
-                    
                     triCut.pointCount = 2;
                     triCut.localCutPos0 = intersectionPointBuffer[0];
                     triCut.localCutPos1 = intersectionPointBuffer[1];
@@ -267,12 +297,29 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             list.Add(cut);
         }
 
+        cuttingResults.Clear();
+        
+        var tempList = new List<TriCutPoint>();
+        
         foreach(var key in dic.Keys)
         {
             var meshCollider = TryConvertColliderIntoMesh(key);
 
-            TryCuttingMeshCollider(meshCollider, dic[key]);
+            var listOfTriCutPoints = dic[key];
+
+            var plane = ePlane.BOTTOM;
+            tempList.Clear();
+            foreach(var triCutPoint in listOfTriCutPoints)
+            {
+                if(triCutPoint.plane == plane)
+                    tempList.Add(triCutPoint);
+            }
+            TryCuttingMeshCollider(meshCollider, tempList, plane);
         }
+
+        //we have filled our results... yes?
+        Log($"cut result count: [{cuttingResults.Count}]");
+        ResolveCutResult(cuttingResults[0], separateCutParts);
     }
 
     private MeshCollider TryConvertColliderIntoMesh(Collider target)
@@ -317,7 +364,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         }
     }
 
-    private void TryCuttingMeshCollider(MeshCollider meshCollider, List<TriCutPoint> triCutPoints)
+    private void TryCuttingMeshCollider(MeshCollider meshCollider, List<TriCutPoint> triCutPoints, ePlane plane)
     {
         //this is the bit where it gets serious
         HashSet<int> newTrisAdded = new(512);
@@ -364,9 +411,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             var worldPoint0 = localToWorldMatrix.MultiplyPoint3x4(point0);
             var worldPoint1 = localToWorldMatrix.MultiplyPoint3x4(point1);
             var worldPoint2 = localToWorldMatrix.MultiplyPoint3x4(point2);
-            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0);
-            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1);
-            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2);
+            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, plane);
+            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, plane);
+            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, plane);
             
            // Log($"Plane vert check: 0[{point0OnCutSideOfPlane}] 1[{point1OnCutSideOfPlane}] 2[{point2OnCutSideOfPlane}]");
 
@@ -466,9 +513,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             var worldPoint1 = localToWorldMatrix.MultiplyPoint3x4(point1);
             var worldPoint2 = localToWorldMatrix.MultiplyPoint3x4(point2);
             
-            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0);
-            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1);
-            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2);
+            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, plane);
+            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, plane);
+            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, plane);
 
             if(point0OnCutSideOfPlane && point1OnCutSideOfPlane && point2OnCutSideOfPlane)
             {
@@ -484,7 +531,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         //we have added a bunch of new verts. 
         //can we stitch them together?
         var newTris = new List<int>(newTrisAdded);
-        var limitPlane = GetLocalUnityPlane(localToWorldMatrix);
+        var limitPlane = GetLocalUnityPlane(localToWorldMatrix, plane);
         BuildCap(newTris, limitPlane, triBuffer, true);
 
         var result = MeshIntersection.TidyMesh(triBuffer, vertsBuffer, normalsBuffer, uvBuffer);
@@ -501,7 +548,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         meshCollider.sharedMesh = null;
         meshCollider.sharedMesh = mesh;
         Physics.BakeMesh(mesh.GetInstanceID(), true);
-
 
 
         numTriangles = triBuffer2.Count / 3;
@@ -523,9 +569,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             var worldPoint1 = localToWorldMatrix.MultiplyPoint3x4(point1);
             var worldPoint2 = localToWorldMatrix.MultiplyPoint3x4(point2);
 
-            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, true);
-            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, true);
-            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, true);
+            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, plane, true);
+            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, plane, true);
+            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, plane, true);
 
             if (point0OnCutSideOfPlane && point1OnCutSideOfPlane && point2OnCutSideOfPlane)
             {
@@ -542,7 +588,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         }
 
         newTris = new List<int>(newTrisAdded);
-        limitPlane = GetLocalUnityPlane(localToWorldMatrix);
+        limitPlane = GetLocalUnityPlane(localToWorldMatrix, plane);
         BuildCap(newTris, limitPlane, triBuffer2, false);
 
         result = MeshIntersection.TidyMesh(triBuffer2, vertsBuffer, normalsBuffer, uvBuffer);
@@ -568,20 +614,14 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         var clone = new GameObject();
         clone.name = originalObject.name + "_clone";
 
-        if (separateCutParts)
-        {
-            clone.transform.SetParent(originalTransform.parent, false);
-            clone.transform.localScale = originalTransform.localScale;
-            clone.transform.position = originalTransform.TransformPoint(localCenterOfMassOffset);
-            clone.transform.localRotation = originalTransform.localRotation;
-        }
-        else
-        {
-            clone.transform.SetParent(originalTransform, false);  
-            clone.transform.localPosition = Vector3.zero;
-            clone.transform.localRotation = Quaternion.identity;
-            clone.transform.localScale = Vector3.one;
-        }
+        var cutResult = new CutResult();
+        cutResult.cutCreatedObject = clone;
+
+        cutResult.cutCreatedParentTransform = originalTransform.parent;
+        cutResult.cutSourceTransform = originalTransform;
+        cutResult.cutSourceLocalScale = originalTransform.localScale;
+        cutResult.cutCreatedWorldPosition = originalTransform.TransformPoint(localCenterOfMassOffset);
+        cutResult.cutSourceLocalRotation = originalTransform.localRotation;
         
         meshFilter = clone.AddComponent<MeshFilter>();
         meshCollider = clone.AddComponent<MeshCollider>();
@@ -599,18 +639,42 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         {
             if (originalBody != null)
             {
-                var cloneBody = clone.AddComponent<Rigidbody>();
-                cloneBody.mass = originalBody.mass;
-                cloneBody.angularDamping = originalBody.angularDamping;
-                cloneBody.linearDamping = originalBody.linearDamping;
-                cloneBody.useGravity = true;
-                cloneBody.automaticInertiaTensor = true;
-                cloneBody.automaticCenterOfMass = true;
+                cutResult.cutSourceRigidBody = originalBody;
             }
+        }
+
+        cutResult.cutPlane = plane;
+        cuttingResults.Add(cutResult);
+    }
+
+
+    private void ResolveCutResult(CutResult result, bool separateAsNewBody)
+    {
+        if(separateAsNewBody == false)
+        {
+            result.cutCreatedObject.transform.SetParent(result.cutSourceTransform);
+            result.cutCreatedObject.transform.localPosition = Vector3.zero;
+            result.cutCreatedObject.transform.localRotation = Quaternion.identity;
+            result.cutCreatedObject.transform.localScale = Vector3.one;
+        }
+        else
+        {
+            result.cutCreatedObject.transform.SetParent(result.cutCreatedParentTransform, false);
+            result.cutCreatedObject.transform.localScale = result.cutSourceLocalScale;
+            result.cutCreatedObject.transform.position = result.cutCreatedWorldPosition;
+            result.cutCreatedObject.transform.localRotation = result.cutSourceLocalRotation;
+
+            var cloneBody = result.cutCreatedObject.AddComponent<Rigidbody>();
+            cloneBody.mass = result.bodyMass ;
+            cloneBody.angularDamping = result.cutSourceRigidBody.angularDamping;
+            cloneBody.linearDamping = result.cutSourceRigidBody.linearDamping;
+            cloneBody.useGravity = true;
+            cloneBody.automaticInertiaTensor = true;
+            cloneBody.automaticCenterOfMass = true;
         }
     }
 
-    private (Vector3 backA, Vector3 backB, Vector3 frontA, Vector3 frontB) GetPlane()
+    private (Vector3 backA, Vector3 backB, Vector3 frontA, Vector3 frontB) GetPlane(ePlane plane)
     {
         var depth = 100f;
         var width = 100f;
@@ -633,9 +697,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         return (lb, rb, lf, rf);
     }
 
-    private Plane GetLocalUnityPlane(Matrix4x4 localToWorldMatrix)
+    private Plane GetLocalUnityPlane(Matrix4x4 localToWorldMatrix, ePlane plane)
     {
-        var worldPlane = GetPlane();
+        var worldPlane = GetPlane(plane);
 
         var worldToLocalMatrix = localToWorldMatrix.inverse;
         var localBackA = worldToLocalMatrix.MultiplyPoint( worldPlane.backA );
@@ -645,11 +709,11 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         return localPlane;
     }
 
-    private bool VertPositionedOnCutSideOfPlane(Vector3 worldVert, bool flip = false)
+    private bool VertPositionedOnCutSideOfPlane(Vector3 worldVert, ePlane plane, bool flip = false)
     {
 
         //we need to get our plane 'normal' and get the dot against the localVert 
-        var planeVerts = GetPlane();
+        var planeVerts = GetPlane(plane);
         var myPlane = new Plane(planeVerts.backA, planeVerts.frontA, planeVerts.frontB);
 
         return myPlane.GetSide(worldVert) != flip;
@@ -872,7 +936,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
        
 
-        var bottomPlane = GetPlane();
+        var bottomPlane = GetPlane(ePlane.BOTTOM);
         Gizmos.DrawLine( bottomPlane.frontA, bottomPlane.frontB );
         // Gizmos.DrawCube(bottomPlane.backA, pointSize);
         // Gizmos.DrawCube(bottomPlane.backB, pointSize);
