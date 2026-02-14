@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -7,7 +8,7 @@ using UnityEngine.InputSystem;
 //need for if i'm not pointing directly at a thing, for our plane cast to catch it
 //detect Detachment and make bodies
 //also eliminate bits which are too tiny. 
-
+//what about n sided polygon instead of square? we use a rot value anyway...
 
 public class PlayerWeaponBoxCutter : PlayerWeapon
 {
@@ -69,11 +70,25 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         TOP = 20,
         LEFT = 30, 
         RIGHT = 40,
+
+        MIDDLE_HORIZONTAL = 50,
+
+        POLYGON = 60,
+    }
+
+    public enum eMode
+    {
+        INVALID = 0,
+
+        BOX = 10,
+        SLICE = 20,
+
+        N_SIDED_POLYGON = 30,
     }
 
     private List<CutResult> cuttingResults = new List<CutResult>();
 
-    private List<Vector3> lastFrameCastPoints = new(32);
+    private Dictionary<ePlane, List<Vector3>> lastFrameCastPoints = new(8);
     private List<TriCutPoint> lastFrameTriCutPoints = new(64);
 
     private RaycastHit[] castHitBuffer = new RaycastHit[32];
@@ -89,6 +104,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
     //depth is fixed
     public float depth = 10f;
 
+    public eMode mode = eMode.SLICE;
 
     public float planeRotation = 0f;
     public float planeRotationSpeed = 45f;
@@ -97,6 +113,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
     private float maxSize = 1f;
 
     public bool cutOnlyNearest;
+
+    public int polygonSideCount = 3;
 
     private bool canFire = false;
     private bool CanFire
@@ -149,6 +167,16 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             height += sizeChangeSpeed * Time.deltaTime;
             height = Mathf.Clamp(height, minSize, maxSize);
         }
+
+        if(Keyboard.current.yKey.wasPressedThisFrame)
+        {
+            if(mode == eMode.BOX)
+                mode = eMode.SLICE;
+            else if(mode == eMode.SLICE)
+                mode = eMode.N_SIDED_POLYGON;
+            else if(mode == eMode.N_SIDED_POLYGON)
+                mode = eMode.BOX;
+        }
     }
 
     private void Checking()
@@ -171,7 +199,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             //using a simple raycast, find the thing we're actually pointing at
             var rayHit = Physics.Raycast(rayOrigin, ray.direction, out var hitInfo, depth, layerMask);
 
-            if (rayHit == false)
+            if (rayHit == false || hitInfo.collider.attachedRigidbody == null)
             {
                 bool yesHit = false;
                 var nearestProx = 1000f;
@@ -203,10 +231,21 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                     var meshFilter = collider.GetComponent<MeshFilter>();
                     if (meshFilter != null)
                     {
-                        CastPlaneAgainstMesh(collider, meshFilter, ePlane.BOTTOM, shortenedPlanes: true);
-                        CastPlaneAgainstMesh(collider, meshFilter, ePlane.TOP, shortenedPlanes: true);
-                        CastPlaneAgainstMesh(collider, meshFilter, ePlane.RIGHT, shortenedPlanes: true);
-                        CastPlaneAgainstMesh(collider, meshFilter, ePlane.LEFT, shortenedPlanes: true);
+                        if(mode == eMode.BOX)
+                        {
+                            CastPlaneAgainstMesh(collider, meshFilter, ePlane.BOTTOM, shortenedPlanes: true);
+                            CastPlaneAgainstMesh(collider, meshFilter, ePlane.TOP, shortenedPlanes: true);
+                            CastPlaneAgainstMesh(collider, meshFilter, ePlane.RIGHT, shortenedPlanes: true);
+                            CastPlaneAgainstMesh(collider, meshFilter, ePlane.LEFT, shortenedPlanes: true);
+                        }
+                        else if(mode == eMode.SLICE)
+                        {
+                            CastPlaneAgainstMesh(collider, meshFilter, ePlane.MIDDLE_HORIZONTAL, shortenedPlanes: false);
+                        }
+                        else if(mode == eMode.N_SIDED_POLYGON)
+                        {
+                            CastPolyPlanesAgainstMesh(collider, meshFilter, shortenedPlanes: true);
+                        }
                     }
                 }
             }
@@ -220,7 +259,25 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         var mesh = meshFilter.mesh;
         CastPlaneAgainstMesh(collider, mesh, meshWorldMatrix, meshLocalMatrix, plane, shortenedPlanes);
     }  
-    
+
+    private void CastPolyPlanesAgainstMesh(Collider collider, MeshFilter meshFilter, bool shortenedPlanes = false)
+    {
+        for(int i = 0 ; i < polygonSideCount; i++)
+        {
+            var worldPlane = GetPolyPlane(i, polygonSideCount, shortenedPlanes);
+            CastPolyPlaneAgainstMesh(collider, meshFilter, worldPlane, shortenedPlanes);
+        }
+    }
+    private void CastPolyPlaneAgainstMesh(Collider collider, MeshFilter meshFilter, SlicePlane worldPlane, bool shortenedPlanes = false)
+    {
+        var meshWorldMatrix = meshFilter.transform.worldToLocalMatrix;
+        var meshLocalMatrix = meshFilter.transform.localToWorldMatrix;
+        var mesh = meshFilter.mesh;
+        var plane = ePlane.POLYGON;
+        
+        CastPlaneAgainstMesh(collider, mesh, meshWorldMatrix, meshLocalMatrix, plane, worldPlane);
+    }
+
     private void ClearCache()
     {
         dic.Clear();
@@ -237,6 +294,10 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
     private void CastPlaneAgainstMesh(Collider collider, Mesh mesh, Matrix4x4 meshWorldMatrix, Matrix4x4 meshLocalMatrix, ePlane plane, bool shortenedPlanes = false)
     {
         var worldPlane = GetPlane(plane, shortenedPlanes);
+        CastPlaneAgainstMesh(collider, mesh, meshWorldMatrix, meshLocalMatrix, plane, worldPlane);
+    }
+    private void CastPlaneAgainstMesh(Collider collider, Mesh mesh, Matrix4x4 meshWorldMatrix, Matrix4x4 meshLocalMatrix, ePlane plane, SlicePlane worldPlane)
+    {
         var localBackA = meshWorldMatrix.MultiplyPoint3x4(worldPlane.backA);
         var localBackb = meshWorldMatrix.MultiplyPoint3x4(worldPlane.backB);
         var localFrontA = meshWorldMatrix.MultiplyPoint3x4(worldPlane.frontA);
@@ -281,7 +342,13 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                     foreach(var localIntersectionPoint in intersectionPointBuffer)
                     {
                         var worldIntersectionPoint = meshLocalMatrix.MultiplyPoint3x4(localIntersectionPoint);
-                        lastFrameCastPoints.Add(worldIntersectionPoint);
+
+                        if(lastFrameCastPoints.TryGetValue(plane, out var castPointsList) == false)
+                        {
+                            castPointsList = new List<Vector3>();
+                            lastFrameCastPoints[plane] = castPointsList;
+                        }
+                        castPointsList.Add(worldIntersectionPoint);
                     }
 
                     var triCut = new TriCutPoint();
@@ -341,68 +408,65 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
     {
         GameObject finalObject = null;
         var meshFilter = meshCollider.GetComponent<MeshFilter>();
-        var plane = ePlane.TOP;
-        
-        plane = ePlane.BOTTOM;
 
+        if (mode == eMode.BOX)
+        {
+            Cut(ePlane.BOTTOM, ref meshCollider, ref meshFilter, ref finalObject, false);
+            Cut(ePlane.TOP, ref meshCollider, ref meshFilter, ref finalObject, false);
+            Cut(ePlane.LEFT, ref meshCollider, ref meshFilter, ref finalObject, false);
+            Cut(ePlane.RIGHT, ref meshCollider, ref meshFilter, ref finalObject, false);
+            if (finalObject != null)
+            {
+                GameObject.Destroy(finalObject);
+            }
+        }
+        else if(mode == eMode.SLICE)
+        {
+            Cut(ePlane.MIDDLE_HORIZONTAL, ref meshCollider, ref meshFilter, ref finalObject, separateCutParts: true, shortenedPlanes: false);
+        }
+        else if(mode == eMode.N_SIDED_POLYGON)
+        {
+            for(int i = 0 ; i < polygonSideCount; i++)
+            {
+                var plane = ePlane.POLYGON;
+                var worldPlane = GetPolyPlane(i, polygonSideCount, false);
+                CutPoly(plane, worldPlane, ref meshCollider, ref meshFilter, ref finalObject, separateCutParts: false, shortenedPlanes: false);
+            }
+            if (finalObject != null)
+            {
+                GameObject.Destroy(finalObject);
+            }
+        }
+    }
+
+    private void Cut(ePlane plane, ref MeshCollider meshCollider, ref MeshFilter meshFilter, ref GameObject finalObject, bool separateCutParts, bool shortenedPlanes = false)
+    {
         ClearCache();
-        CastPlaneAgainstMesh(meshCollider, meshFilter, plane);
-        TryCuttingMeshCollider(meshCollider, lastFrameTriCutPoints, plane, false);
+        CastPlaneAgainstMesh(meshCollider, meshFilter, plane, shortenedPlanes);
+        TryCuttingMeshCollider(meshCollider, lastFrameTriCutPoints, plane, separateCutParts);
 
         Log($"cut result count [{plane}]: [{cuttingResults.Count}]");
         if(cuttingResults.Count > 0)
         {
-            ResolveCutResult(cuttingResults[0], false);
+            ResolveCutResult(cuttingResults[0], separateCutParts);
             meshCollider = cuttingResults[0].cutCreatedMeshCollider;
             meshFilter = cuttingResults[0].cutCreatedMeshFilter;
             finalObject = cuttingResults[0].cutCreatedObject;
         }
-
-        plane = ePlane.TOP;
+    } 
+    private void CutPoly(ePlane plane, SlicePlane worldPlane, ref MeshCollider meshCollider, ref MeshFilter meshFilter, ref GameObject finalObject, bool separateCutParts, bool shortenedPlanes = false)
+    {
         ClearCache();
-        CastPlaneAgainstMesh(meshCollider, meshFilter, plane);
-        TryCuttingMeshCollider(meshCollider, lastFrameTriCutPoints, plane, false);
+        CastPolyPlaneAgainstMesh(meshCollider, meshFilter, worldPlane, shortenedPlanes);
+        TryCuttingMeshCollider(meshCollider, lastFrameTriCutPoints, worldPlane, plane, separateCutParts);
 
         Log($"cut result count [{plane}]: [{cuttingResults.Count}]");
         if(cuttingResults.Count > 0)
         {
-            ResolveCutResult(cuttingResults[0], false);
+            ResolveCutResult(cuttingResults[0], separateCutParts);
             meshCollider = cuttingResults[0].cutCreatedMeshCollider;
             meshFilter = cuttingResults[0].cutCreatedMeshFilter;
             finalObject = cuttingResults[0].cutCreatedObject;
-        }
-
-        plane = ePlane.LEFT;
-        ClearCache();
-        CastPlaneAgainstMesh(meshCollider, meshFilter, plane);
-        TryCuttingMeshCollider(meshCollider, lastFrameTriCutPoints, plane, false);
-
-        Log($"cut result count [{plane}]: [{cuttingResults.Count}]");
-        if(cuttingResults.Count > 0)
-        {
-            ResolveCutResult(cuttingResults[0], false);
-            meshCollider = cuttingResults[0].cutCreatedMeshCollider;
-            meshFilter = cuttingResults[0].cutCreatedMeshFilter;
-            finalObject = cuttingResults[0].cutCreatedObject;
-        }
-
-        plane = ePlane.RIGHT;
-        ClearCache();
-        CastPlaneAgainstMesh(meshCollider, meshFilter, plane);
-        TryCuttingMeshCollider(meshCollider, lastFrameTriCutPoints, plane, false);
-
-        Log($"cut result count [{plane}]: [{cuttingResults.Count}]");
-        if(cuttingResults.Count > 0)
-        {
-            ResolveCutResult(cuttingResults[0], false);
-            meshCollider = cuttingResults[0].cutCreatedMeshCollider;
-            meshFilter = cuttingResults[0].cutCreatedMeshFilter;
-            finalObject = cuttingResults[0].cutCreatedObject;
-        }
-
-        if(finalObject != null)
-        {
-            GameObject.Destroy(finalObject);
         }
     }
 
@@ -450,6 +514,11 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
     private void TryCuttingMeshCollider(MeshCollider meshCollider, List<TriCutPoint> triCutPoints, ePlane plane, bool separateCutParts)
     {
+        var slicePlane = GetPlane(plane);
+        TryCuttingMeshCollider(meshCollider, triCutPoints, slicePlane, plane, separateCutParts);
+    }
+    private void TryCuttingMeshCollider(MeshCollider meshCollider, List<TriCutPoint> triCutPoints, SlicePlane slicePlane, ePlane plane, bool separateCutParts)
+    {
         //this is the bit where it gets serious
         HashSet<int> newTrisAdded = new(512);
         HashSet<int> triIndicesRemoved = new(512);
@@ -459,6 +528,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         var localToWorldMatrix = meshCollider.transform.localToWorldMatrix;
 
         int lastSubMeshGot = -1;
+
         //we have a list of tricuts from our raycasts. 
         foreach(var triCut in triCutPoints)
         {
@@ -495,9 +565,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             var worldPoint0 = localToWorldMatrix.MultiplyPoint3x4(point0);
             var worldPoint1 = localToWorldMatrix.MultiplyPoint3x4(point1);
             var worldPoint2 = localToWorldMatrix.MultiplyPoint3x4(point2);
-            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, plane);
-            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, plane);
-            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, plane);
+            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, slicePlane);
+            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, slicePlane);
+            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, slicePlane);
             
            // Log($"Plane vert check: 0[{point0OnCutSideOfPlane}] 1[{point1OnCutSideOfPlane}] 2[{point2OnCutSideOfPlane}]");
 
@@ -597,9 +667,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             var worldPoint1 = localToWorldMatrix.MultiplyPoint3x4(point1);
             var worldPoint2 = localToWorldMatrix.MultiplyPoint3x4(point2);
             
-            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, plane);
-            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, plane);
-            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, plane);
+            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, slicePlane);
+            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, slicePlane);
+            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, slicePlane);
 
             if(point0OnCutSideOfPlane && point1OnCutSideOfPlane && point2OnCutSideOfPlane)
             {
@@ -615,7 +685,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         //we have added a bunch of new verts. 
         //can we stitch them together?
         var newTris = new List<int>(newTrisAdded);
-        var limitPlane = GetLocalUnityPlane(localToWorldMatrix, plane);
+        var limitPlane = GetLocalUnityPlane(localToWorldMatrix, slicePlane);
         BuildCap(newTris, limitPlane, triBuffer, true);
 
         var result = MeshIntersection.TidyMesh(triBuffer, vertsBuffer, normalsBuffer, uvBuffer);
@@ -653,9 +723,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             var worldPoint1 = localToWorldMatrix.MultiplyPoint3x4(point1);
             var worldPoint2 = localToWorldMatrix.MultiplyPoint3x4(point2);
 
-            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, plane, true);
-            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, plane, true);
-            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, plane, true);
+            var point0OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint0, slicePlane, true);
+            var point1OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint1, slicePlane, true);
+            var point2OnCutSideOfPlane = VertPositionedOnCutSideOfPlane(worldPoint2, slicePlane, true);
 
             if (point0OnCutSideOfPlane && point1OnCutSideOfPlane && point2OnCutSideOfPlane)
             {
@@ -672,7 +742,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         }
 
         newTris = new List<int>(newTrisAdded);
-        limitPlane = GetLocalUnityPlane(localToWorldMatrix, plane);
+        limitPlane = GetLocalUnityPlane(localToWorldMatrix, slicePlane);
         BuildCap(newTris, limitPlane, triBuffer2, false);
 
         result = MeshIntersection.TidyMesh(triBuffer2, vertsBuffer, normalsBuffer, uvBuffer);
@@ -696,7 +766,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         mesh.RecalculateBounds();
 
         var clone = new GameObject();
-        clone.name = originalObject.name + "_" + plane;
+        clone.name = originalObject.name;
         var cutMeshFilter = clone.AddComponent<MeshFilter>();
         var cutMeshCollider = clone.AddComponent<MeshCollider>();
         cutMeshCollider.convex = true;
@@ -760,7 +830,14 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         }
     }
 
-    private (Vector3 backA, Vector3 backB, Vector3 frontA, Vector3 frontB) GetPlane(ePlane plane, bool shortened = false)
+    private struct SlicePlane
+    {
+        public Vector3 backA;
+        public Vector3 backB;
+        public Vector3 frontA; 
+        public Vector3 frontB;
+    }
+    private SlicePlane GetPlane(ePlane plane, bool shortened = false)
     {
         var planeDepth = depth;
         var planeWidth = width;
@@ -790,6 +867,10 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             rotation = 90f;
              up = source.up * width / 2f;
             break;
+            case ePlane.MIDDLE_HORIZONTAL:
+            rotation = 0f;
+            up = Vector3.zero;
+            break;
         }
 
         rotation += planeRotation;
@@ -804,28 +885,60 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         Vector3 rb = center + right + (-forward);
         Vector3 rf = center + right + forward;
 
-        return (lb, rb, lf, rf);
+        return new SlicePlane() { backA =lb, backB = rb, frontA = lf, frontB = rf};
+    }
+
+    
+    private SlicePlane GetPolyPlane(int index, int count, bool shortened = false)
+    {
+        var planeDepth = depth;
+        var planeWidth = width;
+
+        if(shortened == false)
+        {
+            planeDepth = 100f;
+            planeWidth = 100f;
+        }
+
+        var source = player.PlayerCamera.transform;
+
+        var forward = source.forward * planeDepth ;
+        var right = source.right * planeWidth / 2f; //this is the length of a side... not 1/2f sadly
+        var up = source.up * height / 2f;
+
+        float rotation = index * (360f / count);
+
+        rotation += planeRotation;
+        var orientation = Quaternion.AngleAxis(rotation, forward);
+        right = orientation * right;
+        up = orientation * up;
+
+        var center = source.position - up;
+
+        Vector3 lb = center + (-right) + (-forward);
+        Vector3 lf = center + (-right) + forward;
+        Vector3 rb = center + right + (-forward);
+        Vector3 rf = center + right + forward;
+
+        return new SlicePlane() { backA =lb, backB = rb, frontA = lf, frontB = rf};
     }
 
 
-    private Plane GetLocalUnityPlane(Matrix4x4 localToWorldMatrix, ePlane plane)
-    {
-        var worldPlane = GetPlane(plane);
 
+    private Plane GetLocalUnityPlane(Matrix4x4 localToWorldMatrix, SlicePlane plane)
+    {
         var worldToLocalMatrix = localToWorldMatrix.inverse;
-        var localBackA = worldToLocalMatrix.MultiplyPoint( worldPlane.backA );
-        var localBackB = worldToLocalMatrix.MultiplyPoint( worldPlane.backB );
-        var localFrontA = worldToLocalMatrix.MultiplyPoint( worldPlane.frontA );
+        var localBackA = worldToLocalMatrix.MultiplyPoint( plane.backA );
+        var localBackB = worldToLocalMatrix.MultiplyPoint( plane.backB );
+        var localFrontA = worldToLocalMatrix.MultiplyPoint( plane.frontA );
         var localPlane = new Plane( localBackA, localBackB, localFrontA );
         return localPlane;
     }
 
-    private bool VertPositionedOnCutSideOfPlane(Vector3 worldVert, ePlane plane, bool flip = false)
+    private bool VertPositionedOnCutSideOfPlane(Vector3 worldVert, SlicePlane plane, bool flip = false)
     {
-
         //we need to get our plane 'normal' and get the dot against the localVert 
-        var planeVerts = GetPlane(plane);
-        var myPlane = new Plane(planeVerts.backA, planeVerts.frontA, planeVerts.frontB);
+        var myPlane = new Plane(plane.backA, plane.frontA, plane.frontB);
 
         return myPlane.GetSide(worldVert) != flip;
     }
@@ -947,11 +1060,28 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         Gizmos.color = Color.green;
 
         Gizmos.color = Color.red;
-        for(int i = 0; i < lastFrameCastPoints.Count - 1; i++)
-        {
-            Gizmos.DrawLine( lastFrameCastPoints[i], lastFrameCastPoints[i + 1] );
-            //Gizmos.DrawCube(lastFrameCastPoint, pointSize * 2);
-        }
+
+        DrawCastPoints(ePlane.BOTTOM);
+        DrawCastPoints(ePlane.TOP);
+        DrawCastPoints(ePlane.LEFT);
+        DrawCastPoints(ePlane.RIGHT);
+        DrawCastPoints(ePlane.MIDDLE_HORIZONTAL);
+        DrawCastPoints(ePlane.POLYGON);
     }
 
+    private void DrawCastPoints(ePlane plane)
+    {
+        if(lastFrameCastPoints.TryGetValue(plane, out var list))
+        {
+            DrawLines(list);
+        }
+    }
+    private static void DrawLines(List<Vector3> points)
+    {
+         for(int i = 0; i < points.Count - 1; i++)
+        {
+            Gizmos.DrawLine( points[i], points[i + 1] );
+        }
+
+    }
 }
