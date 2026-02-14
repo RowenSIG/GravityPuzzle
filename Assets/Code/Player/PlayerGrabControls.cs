@@ -21,6 +21,9 @@ public class PlayerGrabControls : PlayerComponentControls
 
         public float bodyMass;
         public bool bodyUseGravity;
+
+        public Vector3 grabPointPlayerLocalOffset;
+        public Vector3 grabPointObjectLocalOffset;
     }
     private GrabState grab = null;
 
@@ -44,12 +47,16 @@ public class PlayerGrabControls : PlayerComponentControls
                 if (hit)
                 {
                     var body = rayhitinfo.collider.attachedRigidbody;
-                    
-
-                    grab = new GrabState() { body = body, dist = rayhitinfo.distance };
 
                     if(body != null)
                     {
+                        
+                        var worldPoint = rayhitinfo.point;
+                        var localPlayerPoint = player.PlayerCamera.transform.InverseTransformPoint(worldPoint);
+                        var localBodyPoint  = body.transform.InverseTransformPoint(worldPoint);
+
+                        grab = new GrabState() { body = body, dist = rayhitinfo.distance, grabPointPlayerLocalOffset = localPlayerPoint, grabPointObjectLocalOffset = localBodyPoint };
+                        
                         grab.bodyMass = body.mass;
 
                         body.linearDamping = 10f;
@@ -108,12 +115,10 @@ public class PlayerGrabControls : PlayerComponentControls
             if (grab.body == null)
                 return;
 
-            Vector3 newTargetPos;
+            Vector3 worldPlayerTargetPos = player.PlayerCamera.transform.TransformPoint(grab.grabPointPlayerLocalOffset);
+            Vector3 worldBodyPos = grab.body.transform.TransformPoint(grab.grabPointObjectLocalOffset);
 
-            var ray = player.PlayerCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
-            newTargetPos = ray.origin + ray.direction * grabDistance;
-
-            var offset = newTargetPos - grab.body.position;
+            var offset = worldPlayerTargetPos - worldBodyPos;
             grab.body.AddForce( offset * forceStrength, ForceMode.Impulse );
 
             var desiredOrientation = player.PlayerCamera.transform.rotation;
