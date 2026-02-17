@@ -24,6 +24,11 @@ public class PlayerGrabControls : PlayerComponentControls
 
         public Vector3 grabPointPlayerLocalOffset;
         public Vector3 grabPointObjectLocalOffset;
+
+        public Quaternion grabPointObjectLocalRotation;
+
+        public float distanceOffset = 0f;
+        public Quaternion rotationOffset = Quaternion.identity;
     }
     private GrabState grab = null;
 
@@ -54,8 +59,16 @@ public class PlayerGrabControls : PlayerComponentControls
                         var worldPoint = rayhitinfo.point;
                         var localPlayerPoint = player.PlayerCamera.transform.InverseTransformPoint(worldPoint);
                         var localBodyPoint  = body.transform.InverseTransformPoint(worldPoint);
+                        var bodyRotRelativeToPlayer = Quaternion.Inverse(player.PlayerCamera.transform.rotation) * body.transform.rotation;
 
-                        grab = new GrabState() { body = body, dist = rayhitinfo.distance, grabPointPlayerLocalOffset = localPlayerPoint, grabPointObjectLocalOffset = localBodyPoint };
+                        grab = new GrabState()
+                        {
+                            body = body,
+                            dist = rayhitinfo.distance,
+                            grabPointPlayerLocalOffset = localPlayerPoint,
+                            grabPointObjectLocalOffset = localBodyPoint,
+                            grabPointObjectLocalRotation = bodyRotRelativeToPlayer
+                        };
                         
                         grab.bodyMass = body.mass;
 
@@ -115,13 +128,14 @@ public class PlayerGrabControls : PlayerComponentControls
             if (grab.body == null)
                 return;
 
-            Vector3 worldPlayerTargetPos = player.PlayerCamera.transform.TransformPoint(grab.grabPointPlayerLocalOffset);
+            Vector3 worldPlayerForward = player.PlayerCamera.transform.forward;
+            Vector3 worldPlayerTargetPos = player.PlayerCamera.transform.TransformPoint(grab.grabPointPlayerLocalOffset) + (worldPlayerForward * grab.distanceOffset);
             Vector3 worldBodyPos = grab.body.transform.TransformPoint(grab.grabPointObjectLocalOffset);
 
             var offset = worldPlayerTargetPos - worldBodyPos;
             grab.body.AddForce( offset * forceStrength, ForceMode.Impulse );
 
-            var desiredOrientation = player.PlayerCamera.transform.rotation;
+            var desiredOrientation = grab.rotationOffset * (player.PlayerCamera.transform.rotation * grab.grabPointObjectLocalRotation);
             var bodyOrientation = grab.body.transform.rotation;
             var rotationDelta = desiredOrientation * Quaternion.Inverse(bodyOrientation) ;
 

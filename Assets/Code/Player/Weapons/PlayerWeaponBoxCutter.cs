@@ -1,14 +1,11 @@
 using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 //need ability to orient picked up things.
 //need to be able to move ... smoothly
-//need for if i'm not pointing directly at a thing, for our plane cast to catch it
 //detect Detachment and make bodies
 //also eliminate bits which are too tiny. 
-//what about n sided polygon instead of square? we use a rot value anyway...
 
 public class PlayerWeaponBoxCutter : PlayerWeapon
 {
