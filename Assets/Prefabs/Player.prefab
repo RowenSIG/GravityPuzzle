@@ -226,12 +226,16 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::PlayerWeaponBoxCutter
   boxCenterTransform: {fileID: 1353075241068098058}
+  guidanceMode: 20
   width: 0.5
   height: 0.5
   depth: 300
+  mode: 20
   planeRotation: 0
   planeRotationSpeed: 45
+  sizeChangeSpeed: 1
   cutOnlyNearest: 1
+  polygonSideCount: 3
 --- !u!1 &655829372726506928
 GameObject:
   m_ObjectHideFlags: 0

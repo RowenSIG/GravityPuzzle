@@ -83,10 +83,25 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         N_SIDED_POLYGON = 30,
     }
 
+    public enum eGuidanceMode
+    {
+        INVALID = 0,
+
+        PLAYER_FORWARD = 10,
+        TARGET_NORMAL = 20,
+    }
+
+    public eGuidanceMode guidanceMode = eGuidanceMode.PLAYER_FORWARD;
+
     private List<CutResult> cuttingResults = new List<CutResult>();
 
     private Dictionary<ePlane, List<Vector3>> lastFrameCastPoints = new(8);
     private List<TriCutPoint> lastFrameTriCutPoints = new(64);
+
+    private Vector3 nearestHitNormal;
+    private Vector3 nearestHitPoint;
+    private Vector3 nearestHitColliderRight;
+    private Vector3 nearestHitColliderUp;
 
     private RaycastHit[] castHitBuffer = new RaycastHit[32];
     private List<int> triBuffer = new (65535);
@@ -196,6 +211,12 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             //using a simple raycast, find the thing we're actually pointing at
             var rayHit = Physics.Raycast(rayOrigin, ray.direction, out var hitInfo, depth, layerMask);
 
+            if(rayHit)
+            {
+                nearestHitPoint = hitInfo.point;
+            }
+
+
             if (rayHit == false || hitInfo.collider.attachedRigidbody == null)
             {
                 bool yesHit = false;
@@ -217,7 +238,18 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
                 if(yesHit == false)
                     return;
+
+                //any hit on the box CAN be manipulated to find the center of the box as cast
+                var hitPlane = new Plane(hitInfo.normal, hitInfo.point);
+                if(hitPlane.Raycast(ray, out float enter))
+                {
+                    nearestHitPoint = rayOrigin + ray.direction * enter;
+                }
             }
+
+            nearestHitColliderRight = hitInfo.collider.transform.right;
+            nearestHitColliderUp = hitInfo.collider.transform.up;
+            nearestHitNormal = hitInfo.normal;
 
             var bodyHit = hitInfo.collider.attachedRigidbody;
             if (bodyHit != null)
@@ -846,28 +878,55 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         }
 
         var source = player.PlayerCamera.transform;
+        var forward = source.forward;
+        var right = source.right;
+        var unitUp = source.up;
 
-        var forward = source.forward * planeDepth ;
-        var right = source.right * planeWidth / 2f;
-        var up = source.up * height / 2f;
+        if(guidanceMode == eGuidanceMode.TARGET_NORMAL)
+        {
+            forward = -nearestHitNormal ;
+            right = Vector3.Cross(forward, -nearestHitColliderUp) ;
+
+            if(Mathf.Abs(Vector3.Dot(forward, nearestHitColliderUp)) > 0.99f)
+            {
+                //it's actually vertical. so 'up' has to be not up...
+                var rightY0 = nearestHitColliderRight;
+                right = Vector3.Cross(forward, rightY0);
+            }
+
+            unitUp = Vector3.Cross(forward, right) ;
+        }
+
+        debugForward = forward;
+        debugUp = unitUp;
+        debugRight = right;
+
+        forward *= planeDepth;
+        right *= planeWidth / 2f;
+        var up = unitUp * height / 2f;
+        var pos = nearestHitPoint - forward/2f;
 
         float rotation = 0;
         switch(plane)
         {
-            case ePlane.BOTTOM: rotation = 0f;break;
-            case ePlane.TOP: rotation = 180f;break;
+            case ePlane.BOTTOM:
+                rotation = 0f;
+                break;
+            case ePlane.TOP:
+                rotation = 180f;
+                break;
             case ePlane.LEFT:
-             rotation = 270f;
-             up = source.up * width / 2f;
-            break;
-            case ePlane.RIGHT: 
-            rotation = 90f;
-             up = source.up * width / 2f;
-            break;
+                rotation = 270f;
+                up = unitUp * width / 2f;
+                break;
+            case ePlane.RIGHT:
+                rotation = 90f;
+                up = unitUp * width / 2f;
+                break;
             case ePlane.MIDDLE_HORIZONTAL:
-            rotation = 0f;
-            up = Vector3.zero;
-            break;
+                rotation = 0f;
+                up = Vector3.zero;
+                break;
         }
 
         rotation += planeRotation;
@@ -875,8 +934,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         right = orientation * right;
         up = orientation * up;
 
-        var center = source.position - up;
-
+        var center = pos - up;
         Vector3 lb = center + (-right) + (-forward);
         Vector3 lf = center + (-right) + forward;
         Vector3 rb = center + right + (-forward);
@@ -1047,17 +1105,27 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         Debug.Log($"[PlayerWeaponBoxCutter] {log}");
     }
 
-    
+    Vector3 debugUp;
+    Vector3 debugRight;
+    Vector3 debugForward;
+
     private void OnDrawGizmos()
     {
         if(player == null || player.PlayerCamera == null)
             return;
 
-        var pointSize = Vector3.one * 0.05f;
+        Gizmos.color = Color.white;
+        Gizmos.DrawWireCube(nearestHitPoint, Vector3.one * 0.025f);
+        Gizmos.DrawLine(nearestHitPoint, nearestHitPoint + nearestHitNormal * 0.1f);
+
+        Gizmos.color = Color.blue;
+        Gizmos.DrawLine(nearestHitPoint, nearestHitPoint + debugForward);
         Gizmos.color = Color.green;
-
+        Gizmos.DrawLine(nearestHitPoint, nearestHitPoint + debugUp);
         Gizmos.color = Color.red;
+        Gizmos.DrawLine(nearestHitPoint, nearestHitPoint + debugRight);
 
+        Gizmos.color = Color.cyan;
         DrawCastPoints(ePlane.BOTTOM);
         DrawCastPoints(ePlane.TOP);
         DrawCastPoints(ePlane.LEFT);
