@@ -73,6 +73,9 @@ public class ProjectileStickyFoam : MonoBehaviour
         if(otherHitColliders.Contains(other))
             return;
 
+        if(otherHitColliders.Exists((p) => p.attachedRigidbody == other.attachedRigidbody))
+            return;
+
         if(otherHitColliders.Count == 0)
         {
             firstHitMade = true;
@@ -137,6 +140,13 @@ public class ProjectileStickyFoam : MonoBehaviour
         {
             if(otherCollider.attachedRigidbody == body)
                 continue;
+
+            var stickyFoam = otherCollider.GetComponentInParent<ProjectileStickyFoam>();
+            if(stickyFoam)
+            {
+                Physics.IgnoreCollision(ourCollider, otherCollider);
+                continue;
+            }
                 
             var origin = otherCollider.transform.InverseTransformPoint(worldOrigin);
             var axis = otherCollider.transform.InverseTransformDirection(worldAxis);

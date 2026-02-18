@@ -189,6 +189,6 @@ MonoBehaviour:
   projectileSettleGrow: 0.25
   postFirstHitContinuation: 1
   noHitSelfDestructTime: 3
-  bondLimit: 2
+  bondLimit: 6
   breakForce: 100000
   breakTorque: 100000
