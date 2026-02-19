@@ -204,7 +204,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         int layerMask = ~(1 << ignoreLayer);
 
         var boxExtents = new Vector3(width, height, 0.01f);
-        var numHits = Physics.BoxCastNonAlloc(rayOrigin, boxExtents, ray.direction, castHitBuffer, transform.rotation, depth, layerMask);
+        var numHits = Physics.BoxCastNonAlloc(rayOrigin, boxExtents / 2f, ray.direction, castHitBuffer, transform.rotation, depth, layerMask);
 
         if (numHits > 0)
         {
@@ -246,6 +246,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                     nearestHitPoint = rayOrigin + ray.direction * enter;
                 }
             }
+
+            rawHitPoint = hitInfo.point;
+            rawHitNorm = hitInfo.normal;
 
             nearestHitColliderRight = hitInfo.collider.transform.right;
             nearestHitColliderUp = hitInfo.collider.transform.up;
@@ -1109,6 +1112,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
     Vector3 debugRight;
     Vector3 debugForward;
 
+    Vector3 rawHitPoint;
+    Vector3 rawHitNorm;
+
     private void OnDrawGizmos()
     {
         if(player == null || player.PlayerCamera == null)
@@ -1117,6 +1123,10 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         Gizmos.color = Color.white;
         Gizmos.DrawWireCube(nearestHitPoint, Vector3.one * 0.025f);
         Gizmos.DrawLine(nearestHitPoint, nearestHitPoint + nearestHitNormal * 0.1f);
+
+        Gizmos.color = Color.black;
+        Gizmos.DrawWireCube(rawHitPoint, Vector3.one * 0.025f);
+        Gizmos.DrawLine(rawHitPoint, rawHitPoint + rawHitNorm * 0.1f);
 
         Gizmos.color = Color.blue;
         Gizmos.DrawLine(nearestHitPoint, nearestHitPoint + debugForward);
