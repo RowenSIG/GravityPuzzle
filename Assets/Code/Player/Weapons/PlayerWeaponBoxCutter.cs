@@ -720,7 +720,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         var limitPlane = GetLocalUnityPlane(localToWorldMatrix, slicePlane);
         BuildCap(newTris, limitPlane, triBuffer, true);
 
-        var result = MeshIntersection.TidyMesh(triBuffer, vertsBuffer, normalsBuffer, uvBuffer);
+        var result = MeshIntersection.TidyMesh(triBuffer, vertsBuffer, normalsBuffer, uvBuffer, limitPlane.flipped);
 
         mesh.Clear();
         mesh.vertices = result.verts.ToArray();
@@ -777,7 +777,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         limitPlane = GetLocalUnityPlane(localToWorldMatrix, slicePlane);
         BuildCap(newTris, limitPlane, triBuffer2, false);
 
-        result = MeshIntersection.TidyMesh(triBuffer2, vertsBuffer, normalsBuffer, uvBuffer);
+        result = MeshIntersection.TidyMesh(triBuffer2, vertsBuffer, normalsBuffer, uvBuffer, limitPlane);
 
         var localCenterOfMassOffset = Vector3.zero;
         if(separateCutParts)

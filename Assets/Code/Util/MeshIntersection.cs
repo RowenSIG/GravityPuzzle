@@ -8,6 +8,7 @@ using System.Collections.Generic;
 public static class MeshIntersection
 {
     private const float EPSILON = 0.000001f;
+    private const float BIG_EPSILON = 0.001f;
 
     /// <summary>
     /// Checks intersection between a finite triangular face and a finite rectangular plane.
@@ -83,7 +84,7 @@ public static class MeshIntersection
     }
 
     private static readonly float vertEpsilonSquared = (0.001f * 0.001f);
-    public static (List<int> tris, List<Vector3> verts, List<Vector3> normals, List<Vector2> uvs) TidyMesh(List<int> tris, List<Vector3> verts, List<Vector3> normals, List<Vector2> uvs)
+    public static (List<int> tris, List<Vector3> verts, List<Vector3> normals, List<Vector2> uvs) TidyMesh(List<int> tris, List<Vector3> verts, List<Vector3> normals, List<Vector2> uvs, Plane? cutPlane = null)
     {
 
 #if MERGE_VERTS
@@ -121,19 +122,16 @@ public static class MeshIntersection
         }  
 #endif
 
-
-
         //and finally, don't want repeated faces:
-        var newTris = new List<int>(tris.Count);
-
         var numFaces = tris.Count / 3; 
+        var newTris = new List<int>(tris.Count);
         for(int i = 0; i < numFaces; i++)
         {
             var tri0 = tris[0 + i * 3];
             var tri1 = tris[1 + i * 3];
             var tri2 = tris[2 + i * 3];
 
-            bool duplicate = false;
+            bool remove = false;
 
             if(tri0 == tri1 || tri1 == tri2 || tri2 == tri0)
             {
@@ -146,34 +144,47 @@ public static class MeshIntersection
                 var alreadyTri1 = tris[1 + j * 3];
                 var alreadyTri2 = tris[2 + j * 3];
 
-                if(Same(tri0, tri1, tri2, alreadyTri0, alreadyTri1, alreadyTri2))
+                if (Same(tri0, tri1, tri2, alreadyTri0, alreadyTri1, alreadyTri2))
                 {
-                    duplicate = true;
+                    remove = true;
                     break;
                 }
             }
 
-            if(duplicate == false)
+            if (remove)
+                continue;
+
+            //check zero area:
+            var vert0 = verts[tri0];
+            var vert1 = verts[tri1];
+            var vert2 = verts[tri2];
+
+            if (Same(vert0, vert1, vert2))
+                continue;
+
+            //check cutPlane Side:
+            if (cutPlane.HasValue)
             {
-                //check zero area:
-                var vert0 = verts[tri0];
-                var vert1 = verts[tri1];
-                var vert2 = verts[tri2];
-
-                if(Same(vert0, vert1, vert2))
-                    continue;
-
-                newTris.Add(tri0);
-                newTris.Add(tri1);
-                newTris.Add(tri2);
+                if (WrongSide(cutPlane.Value, vert0, vert1, vert2))
+                {
+                    Debug.Log("Tidy mesh Found bad vert");
+                    remove = true;
+                }
             }
+
+            if (remove)
+                continue;
+
+            newTris.Add(tri0);
+            newTris.Add(tri1);
+            newTris.Add(tri2);
         }
 
         Dictionary<int, int> preserveVertInts = new();
         var newVerts = new List<Vector3>(verts.Count);
         var newNormals = new List<Vector3>(verts.Count);
         var newUVs = new List<Vector2>(verts.Count);
-        for(int i = 0 ; i < verts.Count; i++)
+        for (int i = 0; i < verts.Count; i++)
         {
             if(newTris.Contains(i) == false)
                 continue;
@@ -192,6 +203,7 @@ public static class MeshIntersection
                 newTris[i] = newIndex;
         }
 
+        
         return (newTris, newVerts, newNormals, newUVs);
     }
 
@@ -375,6 +387,17 @@ public static class MeshIntersection
         }
 
         return area * 0.5f;
+    }
+
+    private static bool WrongSide(Plane plane, Vector3 vert0, Vector3 vert1, Vector3 vert2)
+    {
+        if (plane.GetDistanceToPoint(vert0) > BIG_EPSILON)
+            return true;
+        if (plane.GetDistanceToPoint(vert1) > BIG_EPSILON)
+            return true;
+        if (plane.GetDistanceToPoint(vert2) > BIG_EPSILON)
+            return true;
+        return false;
     }
 }
 
