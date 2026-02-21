@@ -190,6 +190,25 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             else if(mode == eMode.N_SIDED_POLYGON)
                 mode = eMode.BOX;
         }
+
+        if(Keyboard.current.uKey.wasPressedThisFrame)
+        {
+            if(guidanceMode == eGuidanceMode.TARGET_NORMAL)
+                guidanceMode = eGuidanceMode.PLAYER_FORWARD;
+            else
+                guidanceMode = eGuidanceMode.TARGET_NORMAL;
+        }
+
+        if(Keyboard.current.jKey.wasPressedThisFrame)
+        {
+            polygonSideCount -= 1; 
+            polygonSideCount = Mathf.Clamp(polygonSideCount, 3, 16);
+        }
+        if(Keyboard.current.kKey.wasPressedThisFrame)
+        {
+            polygonSideCount += 1;
+            polygonSideCount = Mathf.Clamp(polygonSideCount, 3, 16);
+        }
     }
 
     private void Checking()
@@ -992,6 +1011,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         var planeDepth = depth;
         var planeWidth = width;
 
+        var angle = Mathf.PI  / polygonSideCount;
+        planeWidth = 2f * (height / 2f) * Mathf.Tan(angle);
+
         if(shortened == false)
         {
             planeDepth = 100f;
@@ -999,11 +1021,35 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         }
 
         var source = player.PlayerCamera.transform;
+        var forward = source.forward;
+        var right = source.right;
+        var unitUp = source.up;
 
-        var forward = source.forward * planeDepth ;
-        var right = source.right * planeWidth / 2f; //this is the length of a side... not 1/2f sadly
-        var up = source.up * height / 2f;
+        if(guidanceMode == eGuidanceMode.TARGET_NORMAL)
+        {
+            forward = -nearestHitNormal ;
+            right = Vector3.Cross(forward, -nearestHitColliderUp) ;
 
+            if(Mathf.Abs(Vector3.Dot(forward, nearestHitColliderUp)) > 0.99f)
+            {
+                //it's actually vertical. so 'up' has to be not up...
+                var rightY0 = nearestHitColliderRight;
+                right = Vector3.Cross(forward, rightY0);
+            }
+
+            unitUp = Vector3.Cross(forward, right) ;
+        }
+        
+
+        debugForward = forward;
+        debugUp = unitUp;
+        debugRight = right;
+
+        forward *= planeDepth;
+        right *= planeWidth / 2f;
+        var up = unitUp * height / 2f;
+        var pos = nearestHitPoint - forward/2f;
+      
         float rotation = index * (360f / count);
 
         rotation += planeRotation;
@@ -1011,7 +1057,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         right = orientation * right;
         up = orientation * up;
 
-        var center = source.position - up;
+        var center = pos - up;
 
         Vector3 lb = center + (-right) + (-forward);
         Vector3 lf = center + (-right) + forward;
