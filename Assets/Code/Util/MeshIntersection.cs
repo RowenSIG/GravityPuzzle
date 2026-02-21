@@ -10,8 +10,9 @@ using Unity.VisualScripting;
 
 public static class MeshIntersection
 {
+    private const float SMALL_EPSILON = 1e-10f;
     private const float EPSILON = 0.000001f;
-    private const float BIG_EPSILON = 0.001f;
+    private const float BIG_EPSILON = 0.0001f;
 
     /// <summary>
     /// Checks intersection between a finite triangular face and a finite rectangular plane.
@@ -183,9 +184,6 @@ public static class MeshIntersection
             newTris.Add(tri2);
         }
 
-        //can we now adjust our list of tris to merge tris which share verts:
-        AttemptToMergeTris(newTris, verts);
-
         Dictionary<int, int> preserveVertInts = new();
         var newVerts = new List<Vector3>(verts.Count);
         var newNormals = new List<Vector3>(verts.Count);
@@ -242,238 +240,14 @@ public static class MeshIntersection
         return false;
     }
 
-    private struct MergeFace
+    private static bool ZeroAreaTri(Vector3 a, Vector3 b, Vector3 c)
     {
-        public int index, tri0, tri1, tri2;
+        float area = Vector3.Cross(b - a, c - a).sqrMagnitude;
+        if (area < SMALL_EPSILON)
+            return true;
+        return false;
     }
-    private struct MergeEdge
-    {
-        public int tri0, tri1;
-        public MergeEdge(int triA, int triB)
-        {
-            tri0 = triA < triB ? triA : triB;
-            tri1 = triA < triB ? triB : triA;
-        }
-    }
-    private struct MergeFacePair
-    {
-        public MergeEdge edge;
-        public MergeFace face0;
-        public MergeFace face1;
-    }
-    private struct MergeFaceResult
-    {
-        public MergeFace newFace;
-        public MergeFace face0;
-        public MergeFace face1;
-    }
-
-    private static Dictionary<MergeEdge, List<MergeFace>> edgeDic = new();
-
-    private static void AttemptToMergeTris(List<int> tris, List<Vector3> verts)
-    {
-        edgeDic.Clear();
-
-        int numFaces = tris.Count / 3;
-        List<MergeFace> faces = new List<MergeFace>(numFaces);
-        
-        //we build our mergetris:
-        for(int i = 0 ; i < numFaces; i++)
-        {
-            int tri0 = tris[0 + i * 3];
-            int tri1 = tris[1 + i * 3];
-            int tri2 = tris[2 + i * 3];
-            var merge0 = new MergeFace() { index = i, tri0 = tri0, tri1 = tri1, tri2 = tri2 };
-            faces.Add(merge0);
-        }
-
-        //according to ai, we can build an edge map - a dic which tells us all the faces which share certain edges:
-        for(int i = 0 ; i < faces.Count; i++)
-        {
-            var face = faces[i];
-            var edge0 = new MergeEdge(face.tri0 , face.tri1);
-            var edge1 = new MergeEdge(face.tri1 , face.tri2);
-            var edge2 = new MergeEdge(face.tri2 , face.tri0);
-
-            Add(edge0, face);
-            Add(edge1, face);
-            Add(edge2, face);
-        }
-
-        var mergeables = new List<MergeFacePair>();
-        //and now we can check every single edge to see if it has 2 tris in its list:
-        foreach(var edge in edgeDic.Keys)
-        {
-            var faceList = edgeDic[edge];
-            if(faceList.Count == 2)
-            {
-                mergeables.Add( new MergeFacePair() { face0 = faceList[0] , face1 = faceList[1] , edge = edge });
-            }
-        }
-
-        Debug.Log($"[MeshIntersection] [AttemptToMergeTris] - tris[{tris.Count}] verts[{verts.Count}] - faces[{faces.Count}] edges[{edgeDic.Count}] -> mergeables[{mergeables.Count}]");
-
-        var merges = new List<MergeFaceResult>();
-        foreach(var mergeable in mergeables)
-        {
-            var face0 = mergeable.face0;
-            var face1 = mergeable.face1;
-            if(Coplanar(face0, face1, verts) == false)
-                continue;
-
-            var edge = mergeable.edge;
-            var face0tipTri = GetTip(face0, edge);
-            var face1tipTri = GetTip(face1, edge);
-
-            //at least one of our edge's points should be directly between our tips:
-            var edge0OnLine = PointOnSegment(verts[edge.tri0], verts[face0tipTri], verts[face1tipTri]);
-            var edge1OnLine = PointOnSegment(verts[edge.tri1], verts[face0tipTri], verts[face1tipTri]);
-
-            if(edge0OnLine == false && edge1OnLine == false)
-                continue;
-
-            //apparently we can now build 2 faces:
-            var newFace0 = new MergeFace() { tri0 = face0tipTri, tri1 = edge.tri0, tri2 = face1tipTri };
-            
-            bool matched = false;
-            if(Coplanar(face0, newFace0, verts) && SameWinding(face0, newFace0, verts))
-            {
-                matched = true;
-            }
-            else 
-            {
-                newFace0 = new MergeFace() { tri0 = face0tipTri, tri1 = edge.tri1, tri2 = face1tipTri };
-                if(Coplanar(face0, newFace0, verts) && SameWinding(face0, newFace0, verts))
-                {
-                    matched = true;
-                }
-            }
-
-            if(matched)
-            {
-                var result = new MergeFaceResult() { face0 = face0, face1 = face1, newFace = newFace0 };
-                merges.Add(result);
-            }
-        }
-        
-        List<int> merged = new List<int>();
-        int notMerged = 0;
-        foreach(var mergeFaceResult in merges)
-        {
-            var face0 = mergeFaceResult.face0;
-            var face1 = mergeFaceResult.face1;
-            var newFace0 = mergeFaceResult.newFace;
-
-            if(merged.Contains(face0.index) || merged.Contains(face1.index))
-            {
-                notMerged += 1;
-                continue;
-            }
-
-            //we now implant our new face in place of our face 0 and set face 1 to all -1's
-            var triIndex0 = 0 + face0.index * 3;
-            var triIndex1 = 1 + face0.index * 3;
-            var triIndex2 = 2 + face0.index * 3;
-
-            tris[triIndex0] = newFace0.tri0;
-            tris[triIndex1] = newFace0.tri1;
-            tris[triIndex2] = newFace0.tri2;
-
-            var removeIndex0 = 0 + face1.index * 3;
-            var removeIndex1 = 1 + face1.index * 3;
-            var removeIndex2 = 2 + face1.index * 3;
-
-            tris[removeIndex0] = -1;
-            tris[removeIndex1] = -1;
-            tris[removeIndex2] = -1;
-
-            merged.Add(face0.index);
-            merged.Add(face1.index);
-
-        }
-
-        Debug.Log($"[MeshIntersection] [AttemptToMergeTris] countremoved[{merges.Count}] notmerged[{notMerged}]");
-
-    }
-
-    private static void Add(MergeEdge edge, MergeFace face)
-    {
-        if (edgeDic.TryGetValue(edge, out var list) == false)
-        {
-            list = new List<MergeFace>();
-            edgeDic[edge] = list;
-        }
-        list.Add(face);
-    }
-
-    private static bool Coplanar(MergeFace baseFace, MergeFace testFace, List<Vector3> verts)
-    {
-        Vector3 a = verts[baseFace.tri0];
-        Vector3 b = verts[baseFace.tri1];
-        Vector3 c = verts[baseFace.tri2];
-
-        Plane p = new Plane(a, b, c);
-
-        Vector3 t0 = verts[testFace.tri0];
-        Vector3 t1 = verts[testFace.tri1];
-        Vector3 t2 = verts[testFace.tri2];
-
-        return Mathf.Abs(p.GetDistanceToPoint(t0)) < EPSILON &&
-               Mathf.Abs(p.GetDistanceToPoint(t1)) < EPSILON &&
-               Mathf.Abs(p.GetDistanceToPoint(t2)) < EPSILON;
-    }
-
-    private static bool SameWinding(
-        MergeFace baseFace,
-        MergeFace testFace,
-        List<Vector3> verts)
-    {
-        Vector3 a0 = verts[baseFace.tri0];
-        Vector3 b0 = verts[baseFace.tri1];
-        Vector3 c0 = verts[baseFace.tri2];
-
-        Vector3 originalNormal = Vector3.Cross(b0 - a0, c0 - a0).normalized;
-
-        Vector3 a = verts[testFace.tri0];
-        Vector3 b = verts[testFace.tri1];
-        Vector3 c = verts[testFace.tri2];
-
-        Vector3 newNormal = Vector3.Cross(b - a, c - a).normalized;
-
-        return Vector3.Dot(originalNormal, newNormal) > 0f;
-    }
-
-    private static bool PointOnSegment(Vector3 p, Vector3 a, Vector3 b)
-    {
-        Vector3 ab = b - a;
-        Vector3 ap = p - a;
-
-        // Collinearity
-        if (Vector3.Cross(ab, ap).sqrMagnitude > EPSILON)
-            return false;
-
-        // Projection inside segment
-        float dot = Vector3.Dot(ap, ab);
-        if (dot < 0f) 
-            return false;
-        if (dot > ab.sqrMagnitude)
-             return false;
-
-        return true;
-    }
-
-
-    private static int GetTip(MergeFace face, MergeEdge edge)
-    {
-        if (face.tri0 != edge.tri0 && face.tri0 != edge.tri1)
-            return face.tri0;
-
-        if (face.tri1 != edge.tri0 && face.tri1 != edge.tri1)
-            return face.tri1;
-
-        return face.tri2;
-    }
-
+   
     public static Vector2 GetUV(Vector3 point, Vector3 vert0, Vector3 vert1, Vector3 vert2, Vector2 uv0, Vector2 uv1, Vector2 uv2)
     {
         // Compute vectors
@@ -639,6 +413,115 @@ public static class MeshIntersection
         return false;
     }
 
+
+    private class CapVert
+    {
+        public int tri;
+        public Vector3 vert;
+
+        public float rotationalAngle;
+    }
+
+    private class CapVertPair
+    {
+        public int tri;
+
+        public Vector3 activeVert;
+        public Vector3 inactiveVert;
+    }
+
+
+    public static void BuildCap(List<int> tris, Plane referencePlane, List<int> triBuffer, List<Vector3> vertsBuffer, bool flip)
+    {
+        var capVerts = new List<CapVert>();
+        foreach(var tri in tris)
+        {
+            var capvert = new CapVert() { tri = tri, vert = vertsBuffer[tri] };
+            capVerts.Add(capvert); 
+        }
+
+        //to get our verts in order, we're going to do that weird 'centroid' thing:
+        Vector3 centroid = Vector3.zero;
+        foreach(var capvert in capVerts)
+            centroid += capvert.vert;
+        
+        centroid /= capVerts.Count;
+
+        Vector3 planeVector = (capVerts[0].vert - centroid).normalized;
+        capVerts[0].rotationalAngle = 0f;
+
+        for(int i = 1; i < capVerts.Count; i++)
+        {
+            var capVert = capVerts[i];
+            var capVertVector = (capVert.vert - centroid).normalized;
+            capVert.rotationalAngle = Vector3.SignedAngle(capVertVector, planeVector, referencePlane.normal);
+        }
+
+        //now we sort them:
+        capVerts.Sort( (a,b) => a.rotationalAngle.CompareTo(b.rotationalAngle));
+
+        //what if we can somehow check colinearity
+        var vert0 = capVerts[0];
+        for(int i = 1 ; i < capVerts.Count - 1; i ++)
+        {
+            var vert1 = capVerts[i];
+            var vert2 = capVerts[i + 1];
+
+            //if(IsColinear(vert0.vert, vert1.vert, vert2.vert))
+            if(ZeroAreaTri(vert0.vert, vert1.vert, vert2.vert))
+            {
+                //we must REMOVE vert1 from our list...
+                capVerts.RemoveAt(i);
+                i --;
+            }
+            else
+            {
+                vert0 = vert1;
+            }
+        }
+        
+
+        Plane testPlane;
+        if(flip)
+        {
+            testPlane = new Plane(-referencePlane.normal, -referencePlane.distance);
+        }
+        else
+        {
+            testPlane = referencePlane;
+        }
+        //and then build a cap using a sort of 'fan'
+        for(int i = 1 ; i < capVerts.Count - 1; i++)
+        {
+            //tri fan
+            var tri0 = capVerts[0].tri;
+            var tri1 = capVerts[i].tri;
+            var tri2 = capVerts[i + 1].tri;
+
+            CaptureMatchedWindingPlane(tri0, tri1, tri2, testPlane, triBuffer, vertsBuffer);
+        }
+    }
+
+    private static void CaptureMatchedWindingPlane(int tri0, int tri1, int tri2, Plane referencePlane, List<int> triBuffer, List<Vector3> vertsBuffer)
+    {
+        var vert0 = vertsBuffer[tri0];
+        var vert1 = vertsBuffer[tri1];
+        var vert2 = vertsBuffer[tri2];
+        var testPlane = new Plane(vert0, vert1, vert2);
+
+        if(Vector3.Dot(testPlane.normal, referencePlane.normal) > 0)
+        {
+            triBuffer.Add(tri0);
+            triBuffer.Add(tri1);
+            triBuffer.Add(tri2);
+        }
+        else
+        {
+            triBuffer.Add(tri0);
+            triBuffer.Add(tri2);
+            triBuffer.Add(tri1);
+        }
+    }
 
 }
 

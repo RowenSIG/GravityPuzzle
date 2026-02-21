@@ -640,7 +640,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             triList.Add(newTri0);
             triList.Add(newTri1);
 
-            BuildCap(triList, facePlane, triBuffer, true);
+            MeshIntersection.BuildCap(triList, facePlane, triBuffer, vertsBuffer, true);
 
             //also, the other side of the plane... ?
             var trisOnBadSide = new List<int>();
@@ -658,7 +658,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             triList2.Add(newTri0);
             triList2.Add(newTri1);
 
-            BuildCap(triList2, facePlane, triBuffer2, true);
+            MeshIntersection.BuildCap(triList2, facePlane, triBuffer2, vertsBuffer, true);
 
             //we duplicate our verts so our cap doesn't share normals with the SIDES
             var planeNormal = triCut.cutPlane.normal;
@@ -718,7 +718,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         //can we stitch them together?
         var newTris = new List<int>(newTrisAdded);
         var limitPlane = GetLocalUnityPlane(localToWorldMatrix, slicePlane);
-        BuildCap(newTris, limitPlane, triBuffer, true);
+        MeshIntersection.BuildCap(newTris, limitPlane, triBuffer, vertsBuffer, true);
 
         var result = MeshIntersection.TidyMesh(triBuffer, vertsBuffer, normalsBuffer, uvBuffer, limitPlane.flipped);
 
@@ -775,7 +775,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
         newTris = new List<int>(newTrisAdded);
         limitPlane = GetLocalUnityPlane(localToWorldMatrix, slicePlane);
-        BuildCap(newTris, limitPlane, triBuffer2, false);
+        MeshIntersection.BuildCap(newTris, limitPlane, triBuffer2, vertsBuffer, false);
 
         result = MeshIntersection.TidyMesh(triBuffer2, vertsBuffer, normalsBuffer, uvBuffer, limitPlane);
 
@@ -1001,26 +1001,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         return myPlane.GetSide(worldVert) != flip;
     }
 
-    private void CaptureMatchedWindingPlane(int tri0, int tri1, int tri2, Plane referencePlane, List<int> triBuffer)
-    {
-        var vert0 = vertsBuffer[tri0];
-        var vert1 = vertsBuffer[tri1];
-        var vert2 = vertsBuffer[tri2];
-        var testPlane = new Plane(vert0, vert1, vert2);
-
-        if(Vector3.Dot(testPlane.normal, referencePlane.normal) > 0)
-        {
-            triBuffer.Add(tri0);
-            triBuffer.Add(tri1);
-            triBuffer.Add(tri2);
-        }
-        else
-        {
-            triBuffer.Add(tri0);
-            triBuffer.Add(tri2);
-            triBuffer.Add(tri1);
-        }
-    }
 
     private Vector2 GetUV(Vector3 vertPos, int tri0, int tri1, int tri2)
     {
@@ -1034,73 +1014,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
         var uv = MeshIntersection.GetUV(vertPos, point0, point1, point2, uv0, uv1, uv2);
         return uv;
-    }
-
-    private class CapVert
-    {
-        public int tri;
-        public Vector3 vert;
-
-        public float rotationalAngle;
-    }
-
-
-    private void BuildCap(List<int> tris, Plane referencePlane, List<int> triBuffer, bool flip)
-    {
-        var capVerts = new List<CapVert>();
-        foreach(var tri in tris)
-        {
-            var capvert = new CapVert() { tri = tri, vert = vertsBuffer[tri] };
-            capVerts.Add(capvert); 
-        }
-
-        //to get our verts in order, we're going to do that weird 'centroid' thing:
-        Vector3 centroid = Vector3.zero;
-        foreach(var capvert in capVerts)
-            centroid += capvert.vert;
-        
-        centroid /= capVerts.Count;
-
-        Vector3 planeVector = (capVerts[0].vert - centroid).normalized;
-        capVerts[0].rotationalAngle = 0f;
-
-        for(int i = 1; i < capVerts.Count; i++)
-        {
-            var capVert = capVerts[i];
-            var capVertVector = (capVert.vert - centroid).normalized;
-            capVert.rotationalAngle = Vector3.SignedAngle(capVertVector, planeVector, referencePlane.normal);
-        }
-
-        //now we sort them:
-        capVerts.Sort( (a,b) => a.rotationalAngle.CompareTo(b.rotationalAngle));
-
-        Plane testPlane;
-        if(flip)
-        {
-            testPlane = new Plane(-referencePlane.normal, -referencePlane.distance);
-        }
-        else
-        {
-            testPlane = referencePlane;
-        }
-        //and then build a cap using a sort of 'fan'
-        for(int i = 1 ; i < capVerts.Count - 1; i++)
-        {
-            //tri fan
-            var tri0 = capVerts[0].tri;
-            var tri1 = capVerts[i].tri;
-            var tri2 = capVerts[i + 1].tri;
-
-            CaptureMatchedWindingPlane(tri0, tri1, tri2, testPlane, triBuffer);
-        }
-    }
-
-    private class CapVertPair
-    {
-        public int tri;
-
-        public Vector3 activeVert;
-        public Vector3 inactiveVert;
     }
 
     private void Log(string log)
