@@ -1,9 +1,6 @@
 #define MERGE_VERTSx
 using UnityEngine;
 using System.Collections.Generic;
-using UnityEditor;
-using UnityEditor.SceneManagement;
-using Unity.VisualScripting;
 
 //AI CODE
 
@@ -523,5 +520,65 @@ public static class MeshIntersection
         }
     }
 
+    public static bool PlaneIntersectsBounds(Plane p, Bounds b)
+    {
+        // Compute the extents projected onto the plane normal
+        Vector3 extents = b.extents;
+        Vector3 absNormal = new Vector3(
+            Mathf.Abs(p.normal.x),
+            Mathf.Abs(p.normal.y),
+            Mathf.Abs(p.normal.z)
+        );
+
+        float r = Vector3.Dot(extents, absNormal);
+
+        // Distance from plane to box center
+        float s = p.GetDistanceToPoint(b.center);
+
+        // Intersection occurs if |s| <= r
+        return Mathf.Abs(s) <= r;
+    }
+
+    public static bool BoundsFullyInsideConvexVolume(List<Plane> planes, Bounds b)
+    {
+        // Get the 8 corners of the bounds
+        Vector3[] corners = new Vector3[8];
+        corners[0] = b.min;
+        corners[1] = new Vector3(b.min.x, b.min.y, b.max.z);
+        corners[2] = new Vector3(b.min.x, b.max.y, b.min.z);
+        corners[3] = new Vector3(b.min.x, b.max.y, b.max.z);
+        corners[4] = new Vector3(b.max.x, b.min.y, b.min.z);
+        corners[5] = new Vector3(b.max.x, b.min.y, b.max.z);
+        corners[6] = new Vector3(b.max.x, b.max.y, b.min.z);
+        corners[7] = b.max;
+
+        foreach (var p in planes)
+        {
+            foreach (var c in corners)
+            {
+                if (p.GetDistanceToPoint(c) > 0f)
+                    return false; // A corner is outside this plane
+            }
+        }
+
+        return true; // All corners inside all planes
+    }
+
+    public static bool MeshIsInsideConvexVolume(List<Plane> planes, Vector3[] verts)
+    {
+        foreach (var v in verts)
+        {
+            foreach (var p in planes)
+            {
+                if (p.GetDistanceToPoint(v) > 0f)
+                {
+                    // This vertex is outside this plane → mesh is not fully inside
+                    return false;
+                }
+            }
+        }
+
+        return true; // all verts inside all planes
+    }
 }
 

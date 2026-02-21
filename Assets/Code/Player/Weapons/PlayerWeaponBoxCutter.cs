@@ -364,8 +364,13 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         var localBackb = meshWorldMatrix.MultiplyPoint3x4(worldPlane.backB);
         var localFrontA = meshWorldMatrix.MultiplyPoint3x4(worldPlane.frontA);
         var localFrontB = meshWorldMatrix.MultiplyPoint3x4(worldPlane.frontB);
+        var localPlane = new Plane(localBackA, localFrontB, localBackb);
 
-        //cache this?
+        if(MeshIntersection.PlaneIntersectsBounds(localPlane, mesh.bounds) == false)
+        {
+            return;
+        }
+
         var numSubmeshes = mesh.subMeshCount;
         for(int i = 0 ; i < numSubmeshes; i++)
         {
@@ -423,7 +428,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                     triCut.tri1 = tri1;
                     triCut.tri2 = tri2;
                     triCut.unityPlane = new Plane(point0, point1, point2);
-                    triCut.cutPlane = new Plane(localBackA, localFrontB, localBackb);
+                    triCut.cutPlane = localPlane;
                     triCut.plane = plane;
 
                     triCut.pointCount = 2;
@@ -539,26 +544,65 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
     private void ProcessUnCutColliders()
     {
+      
         //NOT WORKING - things disappear when they shouldn't.
 
-        // foreach(var collider in lastFrameCollidersHit)
-        // {
-        //     if(collider.transform.childCount > 0)
-        //     {
-        //         //let's just remove the mesh renderer and collider:
-        //         var renderer = collider.GetComponent<MeshRenderer>();
-        //         var filter = collider.GetComponent<MeshFilter>();
+        foreach(var collider in lastFrameCollidersHit)
+        {
+            bool fullyInsidePoly = PolygonContainsMesh(collider as MeshCollider, out var localPlanes);
 
-        //         Destroy(collider);
-        //         Destroy(renderer);
-        //         Destroy(filter);
-        //     }
-        //     else
-        //     {
-        //         //so... we have colliders we hit but our rays didn't intersect them at all?
-        //         GameObject.Destroy(collider.gameObject);
-        //     }
-        // }
+            bool destroy = false;
+
+            if(fullyInsidePoly)
+            {
+                destroy = true;
+            }
+            else
+            {
+                destroy = MeshIntersection.MeshIsInsideConvexVolume(localPlanes, (collider as MeshCollider).sharedMesh.vertices);
+            }
+
+
+            if(destroy)
+            {
+                if (collider.transform.childCount > 0)
+                {
+                    //let's just remove the mesh renderer and collider:
+                    var renderer = collider.GetComponent<MeshRenderer>();
+                    var filter = collider.GetComponent<MeshFilter>();
+
+                    Destroy(collider);
+                    Destroy(renderer);
+                    Destroy(filter);
+                }
+                else
+                {
+                    //so... we have colliders we hit but our rays didn't intersect them at all?
+                    GameObject.Destroy(collider.gameObject);
+                }
+            }
+        }
+    }
+
+    private bool PolygonContainsMesh(MeshCollider collider, out List<Plane> planes)
+    {
+        
+        var meshWorldMatrix = collider.transform.worldToLocalMatrix;
+        planes = new List<Plane>();
+        for(int i = 0 ; i < polygonSideCount; i++)
+        {
+            var worldPlane = GetPolyPlane(i, polygonSideCount, false);
+
+            var localBackA = meshWorldMatrix.MultiplyPoint3x4(worldPlane.backA);
+            var localBackb = meshWorldMatrix.MultiplyPoint3x4(worldPlane.backB);
+            var localFrontB = meshWorldMatrix.MultiplyPoint3x4(worldPlane.frontB);
+            var localPlane = new Plane(localBackA, localBackb, localFrontB);
+
+
+            planes.Add(localPlane);
+        }
+        
+        return MeshIntersection.BoundsFullyInsideConvexVolume(planes, collider.sharedMesh.bounds);
     }
 
     private MeshCollider TryConvertColliderIntoMesh(Collider target)
