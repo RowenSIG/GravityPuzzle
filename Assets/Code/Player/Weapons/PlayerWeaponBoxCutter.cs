@@ -97,6 +97,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
     private Dictionary<ePlane, List<Vector3>> lastFrameCastPoints = new(8);
     private List<TriCutPoint> lastFrameTriCutPoints = new(64);
+    private List<Collider> lastFrameCollidersHit = new ();
 
     private Vector3 nearestHitNormal;
     private Vector3 nearestHitPoint;
@@ -193,6 +194,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
     private void Checking()
     {
+        lastFrameCollidersHit.Clear();
         ClearCache();
         
         //we want to cut whatever we see in front of us (just the first thing) 
@@ -257,9 +259,18 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             var bodyHit = hitInfo.collider.attachedRigidbody;
             if (bodyHit != null)
             {
+                for(int i = 0 ; i < numHits; i++)
+                {
+                    var hit = castHitBuffer[i];
+                    var collider = hit.collider;
+                    if(collider.attachedRigidbody == bodyHit)
+                        lastFrameCollidersHit.Add(collider);
+                }
+
                 var allColliders = bodyHit.GetComponentsInChildren<Collider>();
                 foreach (var collider in allColliders)
                 {
+
                     var meshFilter = collider.GetComponent<MeshFilter>();
                     if (meshFilter != null)
                     {
@@ -426,7 +437,10 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             }
 
             if(rigidBody == cutpoint.collider.attachedRigidbody)
+            {
                 colliders.Add(cutpoint.collider);
+                lastFrameCollidersHit.Remove(cutpoint.collider);
+            }
         }
 
         foreach(var collider in colliders)
@@ -434,6 +448,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             var meshCollider = TryConvertColliderIntoMesh(collider);
             Cut(meshCollider);
         }
+        
+        ProcessUnCutColliders();
     }
 
     private void Cut(MeshCollider meshCollider)
@@ -500,6 +516,30 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             meshFilter = cuttingResults[0].cutCreatedMeshFilter;
             finalObject = cuttingResults[0].cutCreatedObject;
         }
+    }
+
+    private void ProcessUnCutColliders()
+    {
+        //NOT WORKING - things disappear when they shouldn't.
+
+        // foreach(var collider in lastFrameCollidersHit)
+        // {
+        //     if(collider.transform.childCount > 0)
+        //     {
+        //         //let's just remove the mesh renderer and collider:
+        //         var renderer = collider.GetComponent<MeshRenderer>();
+        //         var filter = collider.GetComponent<MeshFilter>();
+
+        //         Destroy(collider);
+        //         Destroy(renderer);
+        //         Destroy(filter);
+        //     }
+        //     else
+        //     {
+        //         //so... we have colliders we hit but our rays didn't intersect them at all?
+        //         GameObject.Destroy(collider.gameObject);
+        //     }
+        // }
     }
 
     private MeshCollider TryConvertColliderIntoMesh(Collider target)
