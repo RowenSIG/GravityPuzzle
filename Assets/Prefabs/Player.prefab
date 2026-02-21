@@ -235,7 +235,7 @@ MonoBehaviour:
   planeRotationSpeed: 45
   sizeChangeSpeed: 1
   cutOnlyNearest: 1
-  polygonSideCount: 3
+  polygonSideCount: 4
 --- !u!1 &655829372726506928
 GameObject:
   m_ObjectHideFlags: 0

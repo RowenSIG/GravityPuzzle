@@ -63,11 +63,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
     {
         INVALID = 0,
 
-        BOTTOM = 10,
-        TOP = 20,
-        LEFT = 30, 
-        RIGHT = 40,
-
         MIDDLE_HORIZONTAL = 50,
 
         POLYGON = 60,
@@ -76,10 +71,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
     public enum eMode
     {
         INVALID = 0,
-
-        BOX = 10,
         SLICE = 20,
-
         N_SIDED_POLYGON = 30,
     }
 
@@ -90,6 +82,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         PLAYER_FORWARD = 10,
         TARGET_NORMAL = 20,
     }
+
+    private const int MIN_POLY_SIDES = 3;
+    private const int MAX_POLY_SIDES = 11;
 
     public eGuidanceMode guidanceMode = eGuidanceMode.PLAYER_FORWARD;
 
@@ -183,12 +178,10 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
         if(Keyboard.current.yKey.wasPressedThisFrame)
         {
-            if(mode == eMode.BOX)
-                mode = eMode.SLICE;
-            else if(mode == eMode.SLICE)
+            if(mode == eMode.SLICE)
                 mode = eMode.N_SIDED_POLYGON;
             else if(mode == eMode.N_SIDED_POLYGON)
-                mode = eMode.BOX;
+                mode = eMode.SLICE;
         }
 
         if(Keyboard.current.uKey.wasPressedThisFrame)
@@ -202,12 +195,12 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         if(Keyboard.current.jKey.wasPressedThisFrame)
         {
             polygonSideCount -= 1; 
-            polygonSideCount = Mathf.Clamp(polygonSideCount, 3, 16);
+            polygonSideCount = Mathf.Clamp(polygonSideCount, MIN_POLY_SIDES, MAX_POLY_SIDES);
         }
         if(Keyboard.current.kKey.wasPressedThisFrame)
         {
             polygonSideCount += 1;
-            polygonSideCount = Mathf.Clamp(polygonSideCount, 3, 16);
+            polygonSideCount = Mathf.Clamp(polygonSideCount, MIN_POLY_SIDES, MAX_POLY_SIDES);
         }
     }
 
@@ -293,14 +286,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                     var meshFilter = collider.GetComponent<MeshFilter>();
                     if (meshFilter != null)
                     {
-                        if(mode == eMode.BOX)
-                        {
-                            CastPlaneAgainstMesh(collider, meshFilter, ePlane.BOTTOM, shortenedPlanes: true);
-                            CastPlaneAgainstMesh(collider, meshFilter, ePlane.TOP, shortenedPlanes: true);
-                            CastPlaneAgainstMesh(collider, meshFilter, ePlane.RIGHT, shortenedPlanes: true);
-                            CastPlaneAgainstMesh(collider, meshFilter, ePlane.LEFT, shortenedPlanes: true);
-                        }
-                        else if(mode == eMode.SLICE)
+                        if(mode == eMode.SLICE)
                         {
                             CastPlaneAgainstMesh(collider, meshFilter, ePlane.MIDDLE_HORIZONTAL, shortenedPlanes: false);
                         }
@@ -481,18 +467,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         GameObject finalObject = null;
         var meshFilter = meshCollider.GetComponent<MeshFilter>();
 
-        if (mode == eMode.BOX)
-        {
-            Cut(ePlane.BOTTOM, ref meshCollider, ref meshFilter, ref finalObject, false);
-            Cut(ePlane.TOP, ref meshCollider, ref meshFilter, ref finalObject, false);
-            Cut(ePlane.LEFT, ref meshCollider, ref meshFilter, ref finalObject, false);
-            Cut(ePlane.RIGHT, ref meshCollider, ref meshFilter, ref finalObject, false);
-            if (finalObject != null)
-            {
-                GameObject.Destroy(finalObject);
-            }
-        }
-        else if(mode == eMode.SLICE)
+        if(mode == eMode.SLICE)
         {
             Cut(ePlane.MIDDLE_HORIZONTAL, ref meshCollider, ref meshFilter, ref finalObject, separateCutParts: true, shortenedPlanes: false);
         }
@@ -1015,20 +990,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         float rotation = 0;
         switch(plane)
         {
-            case ePlane.BOTTOM:
-                rotation = 0f;
-                break;
-            case ePlane.TOP:
-                rotation = 180f;
-                break;
-            case ePlane.LEFT:
-                rotation = 270f;
-                up = unitUp * width / 2f;
-                break;
-            case ePlane.RIGHT:
-                rotation = 90f;
-                up = unitUp * width / 2f;
-                break;
             case ePlane.MIDDLE_HORIZONTAL:
                 rotation = 0f;
                 up = Vector3.zero;
@@ -1179,10 +1140,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         Gizmos.DrawLine(nearestHitPoint, nearestHitPoint + debugRight);
 
         Gizmos.color = Color.cyan;
-        DrawCastPoints(ePlane.BOTTOM);
-        DrawCastPoints(ePlane.TOP);
-        DrawCastPoints(ePlane.LEFT);
-        DrawCastPoints(ePlane.RIGHT);
         DrawCastPoints(ePlane.MIDDLE_HORIZONTAL);
         DrawCastPoints(ePlane.POLYGON);
     }
