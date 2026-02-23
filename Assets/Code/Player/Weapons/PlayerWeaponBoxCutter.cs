@@ -1010,66 +1010,58 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         return new SlicePlane() { backA =lb, backB = rb, frontA = lf, frontB = rf};
     }
 
-    
     private SlicePlane GetPolyPlane(int index, int count, bool shortened = false)
     {
-        var planeDepth = depth;
-        var planeWidth = width;
+        var planeDepth = 100f;
 
-        var angle = Mathf.PI  / polygonSideCount;
-        planeWidth = 2f * (height / 2f) * Mathf.Tan(angle);
-
-        if(shortened == false)
-        {
-            planeDepth = 100f;
-            planeWidth = 100f;
-        }
-
+        // 1. Basic Orientation
         var source = player.PlayerCamera.transform;
         var forward = source.forward;
-        var right = source.right;
-        var unitUp = source.up;
+        var rightBasis = source.right;
+        var upBasis = source.up;
 
         if(guidanceMode == eGuidanceMode.TARGET_NORMAL)
         {
-            forward = -nearestHitNormal ;
-            right = Vector3.Cross(forward, -nearestHitColliderUp) ;
-
+            forward = -nearestHitNormal;
+            rightBasis = Vector3.Cross(forward, -nearestHitColliderUp);
             if(Mathf.Abs(Vector3.Dot(forward, nearestHitColliderUp)) > 0.99f)
             {
-                //it's actually vertical. so 'up' has to be not up...
-                var rightY0 = nearestHitColliderRight;
-                right = Vector3.Cross(forward, rightY0);
+                rightBasis = Vector3.Cross(forward, nearestHitColliderRight);
             }
-
-            unitUp = Vector3.Cross(forward, right) ;
+            upBasis = Vector3.Cross(forward, rightBasis);
         }
-        
-
-        debugForward = forward;
-        debugUp = unitUp;
-        debugRight = right;
-
         forward *= planeDepth;
-        right *= planeWidth / 2f;
-        var up = unitUp * height / 2f;
-        var pos = nearestHitPoint - forward/2f;
-      
-        float rotation = index * (360f / count);
 
-        rotation += planeRotation;
-        var orientation = Quaternion.AngleAxis(rotation, forward);
-        right = orientation * right;
-        up = orientation * up;
+        // 2. Calculate the two corner points of this specific side
+        // We use Cos for Width and Sin for Height to create the "Ellipse"
+        float angleStep = 360f / count;
+        float rad1 = ((-0.5f + index) * angleStep + planeRotation) * Mathf.Deg2Rad;
+        float rad2 = ((-0.5f + index + 1) * angleStep + planeRotation) * Mathf.Deg2Rad;
 
-        var center = pos - up;
+        Vector3 p1 = (rightBasis * Mathf.Cos(rad1) * (width / 2f)) + (upBasis * Mathf.Sin(rad1) * (height / 2f));
+        Vector3 p2 = (rightBasis * Mathf.Cos(rad2) * (width / 2f)) + (upBasis * Mathf.Sin(rad2) * (height / 2f));
 
-        Vector3 lb = center + (-right) + (-forward);
-        Vector3 lf = center + (-right) + forward;
-        Vector3 rb = center + right + (-forward);
-        Vector3 rf = center + right + forward;
+        // 3. Re-derive 'center', 'right', and 'up' for THIS specific plane
+        // The center is the average of the two corners
+        var pos = nearestHitPoint - forward / 2f;
+        var sideCenter = pos + (p1 + p2) / 2f;
 
-        return new SlicePlane() { backA =lb, backB = rb, frontA = lf, frontB = rf};
+        // The 'right' vector is the vector spanning from the center to one corner
+        // This replaces your fixed planeWidth calculation
+        Vector3 sideRight = (p2 - p1) / 2f;
+        
+        if(shortened == false)
+            sideRight = sideRight.normalized * 100f;
+
+            var center = sideCenter;
+            var right = sideRight;
+
+            Vector3 lb = center + (-right) + (-forward);
+            Vector3 lf = center + (-right) + forward;
+            Vector3 rb = center + right + (-forward);
+            Vector3 rf = center + right + forward;
+
+            return new SlicePlane() { backA =lb, backB = rb, frontA = lf, frontB = rf};
     }
 
 
