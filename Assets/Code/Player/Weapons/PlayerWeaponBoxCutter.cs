@@ -68,13 +68,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         POLYGON = 60,
     }
 
-    public enum eMode
-    {
-        INVALID = 0,
-        SLICE = 20,
-        N_SIDED_POLYGON = 30,
-    }
-
     public enum eGuidanceMode
     {
         INVALID = 0,
@@ -83,8 +76,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         TARGET_NORMAL = 20,
     }
 
-    private const int MIN_POLY_SIDES = 3;
-    private const int MAX_POLY_SIDES = 11;
+    private const int MIN_POLY_SIDES = 1;
+    private const int MAX_POLY_SIDES = 6;
 
     public eGuidanceMode guidanceMode = eGuidanceMode.PLAYER_FORWARD;
 
@@ -112,8 +105,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
     //depth is fixed
     public float depth = 10f;
 
-    public eMode mode = eMode.SLICE;
-
     public float planeRotation = 0f;
     public float planeRotationSpeed = 45f;
     public float sizeChangeSpeed = 1f;
@@ -123,6 +114,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
     public bool cutOnlyNearest;
 
     public int polygonSideCount = 3;
+
+    public bool separateCutResult = false;
+    public bool destroyOffcuts = false;
 
     private bool canFire = false;
     private bool CanFire
@@ -176,14 +170,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             height = Mathf.Clamp(height, minSize, maxSize);
         }
 
-        if(Keyboard.current.yKey.wasPressedThisFrame)
-        {
-            if(mode == eMode.SLICE)
-                mode = eMode.N_SIDED_POLYGON;
-            else if(mode == eMode.N_SIDED_POLYGON)
-                mode = eMode.SLICE;
-        }
-
         if(Keyboard.current.uKey.wasPressedThisFrame)
         {
             if(guidanceMode == eGuidanceMode.TARGET_NORMAL)
@@ -195,11 +181,15 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         if(Keyboard.current.jKey.wasPressedThisFrame)
         {
             polygonSideCount -= 1; 
+            if(polygonSideCount == 2)
+                polygonSideCount = 1;
             polygonSideCount = Mathf.Clamp(polygonSideCount, MIN_POLY_SIDES, MAX_POLY_SIDES);
         }
         if(Keyboard.current.kKey.wasPressedThisFrame)
         {
             polygonSideCount += 1;
+            if(polygonSideCount == 2)
+                polygonSideCount = 3;
             polygonSideCount = Mathf.Clamp(polygonSideCount, MIN_POLY_SIDES, MAX_POLY_SIDES);
         }
     }
@@ -286,27 +276,12 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
                     var meshFilter = collider.GetComponent<MeshFilter>();
                     if (meshFilter != null)
                     {
-                        if(mode == eMode.SLICE)
-                        {
-                            CastPlaneAgainstMesh(collider, meshFilter, ePlane.MIDDLE_HORIZONTAL, shortenedPlanes: false);
-                        }
-                        else if(mode == eMode.N_SIDED_POLYGON)
-                        {
-                            CastPolyPlanesAgainstMesh(collider, meshFilter, shortenedPlanes: true);
-                        }
+                        CastPolyPlanesAgainstMesh(collider, meshFilter, shortenedPlanes: true);
                     }
                 }
             }
         }
     }
-
-    private void CastPlaneAgainstMesh(Collider collider, MeshFilter meshFilter, ePlane plane, bool shortenedPlanes = false)
-    {
-        var meshWorldMatrix = meshFilter.transform.worldToLocalMatrix;
-        var meshLocalMatrix = meshFilter.transform.localToWorldMatrix;
-        var mesh = meshFilter.mesh;
-        CastPlaneAgainstMesh(collider, mesh, meshWorldMatrix, meshLocalMatrix, plane, shortenedPlanes);
-    }  
 
     private void CastPolyPlanesAgainstMesh(Collider collider, MeshFilter meshFilter, bool shortenedPlanes = false)
     {
@@ -339,11 +314,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         uvBuffer.Clear();
     }
 
-    private void CastPlaneAgainstMesh(Collider collider, Mesh mesh, Matrix4x4 meshWorldMatrix, Matrix4x4 meshLocalMatrix, ePlane plane, bool shortenedPlanes = false)
-    {
-        var worldPlane = GetPlane(plane, shortenedPlanes);
-        CastPlaneAgainstMesh(collider, mesh, meshWorldMatrix, meshLocalMatrix, plane, worldPlane);
-    }
     private void CastPlaneAgainstMesh(Collider collider, Mesh mesh, Matrix4x4 meshWorldMatrix, Matrix4x4 meshLocalMatrix, ePlane plane, SlicePlane worldPlane)
     {
         var localBackA = meshWorldMatrix.MultiplyPoint3x4(worldPlane.backA);
@@ -467,40 +437,25 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         GameObject finalObject = null;
         var meshFilter = meshCollider.GetComponent<MeshFilter>();
 
-        if(mode == eMode.SLICE)
+        for(int i = 0 ; i < polygonSideCount; i++)
         {
-            Cut(ePlane.MIDDLE_HORIZONTAL, ref meshCollider, ref meshFilter, ref finalObject, separateCutParts: true, shortenedPlanes: false);
+            var plane = ePlane.POLYGON;
+            var worldPlane = GetPolyPlane(i, polygonSideCount, false);
+            CutPoly(plane, worldPlane, ref meshCollider, ref meshFilter, ref finalObject, separateCutParts: false, shortenedPlanes: false);
         }
-        else if(mode == eMode.N_SIDED_POLYGON)
+        if (finalObject != null)
         {
-            for(int i = 0 ; i < polygonSideCount; i++)
-            {
-                var plane = ePlane.POLYGON;
-                var worldPlane = GetPolyPlane(i, polygonSideCount, false);
-                CutPoly(plane, worldPlane, ref meshCollider, ref meshFilter, ref finalObject, separateCutParts: false, shortenedPlanes: false);
-            }
-            if (finalObject != null)
+            if (destroyOffcuts)
             {
                 GameObject.Destroy(finalObject);
+            }
+            else if (separateCutResult)
+            {
+                ResolveCutResult(cuttingResults[0], true);
             }
         }
     }
 
-    private void Cut(ePlane plane, ref MeshCollider meshCollider, ref MeshFilter meshFilter, ref GameObject finalObject, bool separateCutParts, bool shortenedPlanes = false)
-    {
-        ClearCache();
-        CastPlaneAgainstMesh(meshCollider, meshFilter, plane, shortenedPlanes);
-        TryCuttingMeshCollider(meshCollider, lastFrameTriCutPoints, plane, separateCutParts);
-
-        Log($"cut result count [{plane}]: [{cuttingResults.Count}]");
-        if(cuttingResults.Count > 0)
-        {
-            ResolveCutResult(cuttingResults[0], separateCutParts);
-            meshCollider = cuttingResults[0].cutCreatedMeshCollider;
-            meshFilter = cuttingResults[0].cutCreatedMeshFilter;
-            finalObject = cuttingResults[0].cutCreatedObject;
-        }
-    } 
     private void CutPoly(ePlane plane, SlicePlane worldPlane, ref MeshCollider meshCollider, ref MeshFilter meshFilter, ref GameObject finalObject, bool separateCutParts, bool shortenedPlanes = false)
     {
         ClearCache();
@@ -622,11 +577,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         }
     }
 
-    private void TryCuttingMeshCollider(MeshCollider meshCollider, List<TriCutPoint> triCutPoints, ePlane plane, bool separateCutParts)
-    {
-        var slicePlane = GetPlane(plane);
-        TryCuttingMeshCollider(meshCollider, triCutPoints, slicePlane, plane, separateCutParts);
-    }
     private void TryCuttingMeshCollider(MeshCollider meshCollider, List<TriCutPoint> triCutPoints, SlicePlane slicePlane, ePlane plane, bool separateCutParts)
     {
         //this is the bit where it gets serious
@@ -901,12 +851,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         rend.material = originalObject.GetComponent<MeshRenderer>().material;
         Physics.BakeMesh(mesh.GetInstanceID(), true);
 
-        if (separateCutParts)
+        if (originalBody != null)
         {
-            if (originalBody != null)
-            {
-                cutResult.cutSourceRigidBody = originalBody;
-            }
+            cutResult.cutSourceRigidBody = originalBody;
         }
 
         cutResult.cutPlane = plane;
@@ -947,69 +894,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         public Vector3 frontA; 
         public Vector3 frontB;
     }
-    private SlicePlane GetPlane(ePlane plane, bool shortened = false)
-    {
-        var planeDepth = depth;
-        var planeWidth = width;
-
-        if(shortened == false)
-        {
-            planeDepth = 100f;
-            planeWidth = 100f;
-        }
-
-        var source = player.PlayerCamera.transform;
-        var forward = source.forward;
-        var right = source.right;
-        var unitUp = source.up;
-
-        if(guidanceMode == eGuidanceMode.TARGET_NORMAL)
-        {
-            forward = -nearestHitNormal ;
-            right = Vector3.Cross(forward, -nearestHitColliderUp) ;
-
-            if(Mathf.Abs(Vector3.Dot(forward, nearestHitColliderUp)) > 0.99f)
-            {
-                //it's actually vertical. so 'up' has to be not up...
-                var rightY0 = nearestHitColliderRight;
-                right = Vector3.Cross(forward, rightY0);
-            }
-
-            unitUp = Vector3.Cross(forward, right) ;
-        }
-
-        debugForward = forward;
-        debugUp = unitUp;
-        debugRight = right;
-
-        forward *= planeDepth;
-        right *= planeWidth / 2f;
-        var up = unitUp * height / 2f;
-        var pos = nearestHitPoint - forward/2f;
-
-        float rotation = 0;
-        switch(plane)
-        {
-            case ePlane.MIDDLE_HORIZONTAL:
-                rotation = 0f;
-                up = Vector3.zero;
-                break;
-        }
-
-        rotation += planeRotation;
-        var orientation = Quaternion.AngleAxis(rotation, forward);
-        right = orientation * right;
-        up = orientation * up;
-
-        var center = pos - up;
-        Vector3 lb = center + (-right) + (-forward);
-        Vector3 lf = center + (-right) + forward;
-        Vector3 rb = center + right + (-forward);
-        Vector3 rf = center + right + forward;
-
-        return new SlicePlane() { backA =lb, backB = rb, frontA = lf, frontB = rf};
-    }
-
     private SlicePlane GetPolyPlane(int index, int count, bool shortened = false)
     {
         var planeDepth = 100f;
@@ -1017,34 +901,41 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         // 1. Basic Orientation
         var source = player.PlayerCamera.transform;
         var forward = source.forward;
-        var rightBasis = source.right;
-        var upBasis = source.up;
+        var unitRight = source.right;
+        var unitUp = source.up;
 
         if(guidanceMode == eGuidanceMode.TARGET_NORMAL)
         {
             forward = -nearestHitNormal;
-            rightBasis = Vector3.Cross(forward, -nearestHitColliderUp);
+            unitRight = Vector3.Cross(forward, -nearestHitColliderUp);
             if(Mathf.Abs(Vector3.Dot(forward, nearestHitColliderUp)) > 0.99f)
             {
-                rightBasis = Vector3.Cross(forward, nearestHitColliderRight);
+                unitRight = Vector3.Cross(forward, nearestHitColliderRight);
             }
-            upBasis = Vector3.Cross(forward, rightBasis);
+            unitUp = Vector3.Cross(forward, unitRight);
         }
         forward *= planeDepth;
 
         // 2. Calculate the two corner points of this specific side
         // We use Cos for Width and Sin for Height to create the "Ellipse"
         float angleStep = 360f / count;
+        if(count == 1)
+            angleStep = 180f;
         float rad1 = ((-0.5f + index) * angleStep + planeRotation) * Mathf.Deg2Rad;
         float rad2 = ((-0.5f + index + 1) * angleStep + planeRotation) * Mathf.Deg2Rad;
 
-        Vector3 p1 = (rightBasis * Mathf.Cos(rad1) * (width / 2f)) + (upBasis * Mathf.Sin(rad1) * (height / 2f));
-        Vector3 p2 = (rightBasis * Mathf.Cos(rad2) * (width / 2f)) + (upBasis * Mathf.Sin(rad2) * (height / 2f));
+        Vector3 p1 = (unitRight * Mathf.Cos(rad1) * (width / 2f)) + (unitUp * Mathf.Sin(rad1) * (height / 2f));
+        Vector3 p2 = (unitRight * Mathf.Cos(rad2) * (width / 2f)) + (unitUp * Mathf.Sin(rad2) * (height / 2f));
 
         // 3. Re-derive 'center', 'right', and 'up' for THIS specific plane
         // The center is the average of the two corners
         var pos = nearestHitPoint - forward / 2f;
         var sideCenter = pos + (p1 + p2) / 2f;
+
+        if(count == 1)
+        {   
+            sideCenter = pos;
+        }
 
         // The 'right' vector is the vector spanning from the center to one corner
         // This replaces your fixed planeWidth calculation
@@ -1053,18 +944,16 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         if(shortened == false)
             sideRight = sideRight.normalized * 100f;
 
-            var center = sideCenter;
-            var right = sideRight;
+        var center = sideCenter;
+        var right = sideRight;
 
-            Vector3 lb = center + (-right) + (-forward);
-            Vector3 lf = center + (-right) + forward;
-            Vector3 rb = center + right + (-forward);
-            Vector3 rf = center + right + forward;
+        Vector3 lb = center + (-right) + (-forward);
+        Vector3 lf = center + (-right) + forward;
+        Vector3 rb = center + right + (-forward);
+        Vector3 rf = center + right + forward;
 
-            return new SlicePlane() { backA =lb, backB = rb, frontA = lf, frontB = rf};
+        return new SlicePlane() { backA = lb, backB = rb, frontA = lf, frontB = rf };
     }
-
-
 
     private Plane GetLocalUnityPlane(Matrix4x4 localToWorldMatrix, SlicePlane plane)
     {
