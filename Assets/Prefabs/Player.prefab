@@ -230,12 +230,13 @@ MonoBehaviour:
   width: 0.5
   height: 0.5
   depth: 300
-  mode: 20
   planeRotation: 0
   planeRotationSpeed: 45
   sizeChangeSpeed: 1
   cutOnlyNearest: 1
   polygonSideCount: 4
+  separateCutResult: 1
+  destroyOffcuts: 0
 --- !u!1 &655829372726506928
 GameObject:
   m_ObjectHideFlags: 0

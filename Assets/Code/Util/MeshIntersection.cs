@@ -580,5 +580,31 @@ public static class MeshIntersection
 
         return true; // all verts inside all planes
     }
+
+    public static float CalculateVolume(List<int> tris, List<Vector3> verts)
+    {
+        float volume = 0;
+
+        for (int i = 0; i < tris.Count; i += 3)
+        {
+            var tri0 = tris[i + 0];
+            var tri1 = tris[i + 1];
+            var tri2 = tris[i + 2];
+            // Get vertices in world space or local space (stay consistent)
+            Vector3 p1 = verts[tri0];
+            Vector3 p2 = verts[tri1];
+            Vector3 p3 = verts[tri2];
+
+            // The signed volume of the tetrahedron formed by origin and the triangle
+            volume += Vector3.Dot(p1, Vector3.Cross(p2, p3)) / 6.0f;
+        }
+
+        // Use Abs because depending on winding order, volume can be negative
+        var result = Mathf.Abs(volume);
+        Debug.Log($"[MeshIntersection] CalculateVolume Result[{result}] tris[{tris.Count}] verts[{verts.Count}]");
+        return result;
+    }
+
+
 }
 

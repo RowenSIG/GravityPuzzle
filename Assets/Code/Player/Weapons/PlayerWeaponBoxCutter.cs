@@ -56,7 +56,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
         public ePlane cutPlane;
 
-        public float bodyMass; //calculate
+        public float cutSourceBodyVolume;
+        public float cutCreatedBodyVolume;
     }
     
     private enum ePlane
@@ -705,7 +706,6 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             newTrisAdded.Add(capTri1);
         }
 
-      
         //let's do it.
         //find all faces which are entirely on the wrong side of our plane:
         int numTriangles = triBuffer.Count / 3;
@@ -742,6 +742,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
         if (newTrisAdded.Count <= 0)
             return;
+        
+        
         //we have added a bunch of new verts. 
         //can we stitch them together?
         var newTris = new List<int>(newTrisAdded);
@@ -750,6 +752,8 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
 
         var result = MeshIntersection.TidyMesh(triBuffer, vertsBuffer, normalsBuffer, uvBuffer, limitPlane.flipped);
 
+        var originalBodyNewVolume = MeshIntersection.CalculateVolume(result.tris, result.verts);
+      
         mesh.Clear();
         mesh.vertices = result.verts.ToArray();
         mesh.triangles = result.tris.ToArray();
@@ -806,6 +810,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         MeshIntersection.BuildCap(newTris, limitPlane, triBuffer2, vertsBuffer, false);
 
         result = MeshIntersection.TidyMesh(triBuffer2, vertsBuffer, normalsBuffer, uvBuffer, limitPlane);
+        var newBodyVolume = MeshIntersection.CalculateVolume(result.tris, result.verts);
 
         var localCenterOfMassOffset = Vector3.zero;
         if(separateCutParts)
@@ -847,6 +852,9 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
         cutResult.cutSourceMeshCollider = meshCollider;
         cutResult.cutSourceMeshFilter = meshFilter;
 
+        cutResult.cutSourceBodyVolume = originalBodyNewVolume;
+        cutResult.cutCreatedBodyVolume = newBodyVolume;
+
         var rend = clone.AddComponent<MeshRenderer>();
         rend.material = originalObject.GetComponent<MeshRenderer>().material;
         Physics.BakeMesh(mesh.GetInstanceID(), true);
@@ -877,8 +885,19 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             result.cutCreatedObject.transform.position = result.cutCreatedWorldPosition;
             result.cutCreatedObject.transform.localRotation = result.cutSourceLocalRotation;
 
+            var originalBodyMass = result.cutSourceRigidBody.mass;
+            var originalBodyVolume = result.cutCreatedBodyVolume + result.cutSourceBodyVolume;
+
+            var originalBodyProportion = result.cutSourceBodyVolume / originalBodyVolume;
+            var cutResultBodyProportion = result.cutCreatedBodyVolume / originalBodyVolume;
+            
+            var newOriginalBodyMass = originalBodyMass * originalBodyProportion;
+            var cutResultBodyMass = originalBodyMass * cutResultBodyProportion;
+            result.cutSourceRigidBody.mass = newOriginalBodyMass;
+            Debug.Log($"[PlayerWeaponBoxCutter] mass - originalBodyMass[{originalBodyMass}] cutResultBodyMass[{cutResultBodyMass}] newOriginalBodyMass[{newOriginalBodyMass}]");
+
             var cloneBody = result.cutCreatedObject.AddComponent<Rigidbody>();
-            cloneBody.mass = result.bodyMass ;
+            cloneBody.mass = cutResultBodyMass;
             cloneBody.angularDamping = result.cutSourceRigidBody.angularDamping;
             cloneBody.linearDamping = result.cutSourceRigidBody.linearDamping;
             cloneBody.useGravity = true;
