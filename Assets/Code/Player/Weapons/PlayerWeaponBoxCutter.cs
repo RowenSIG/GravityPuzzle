@@ -450,7 +450,7 @@ public class PlayerWeaponBoxCutter : PlayerWeapon
             {
                 GameObject.Destroy(finalObject);
             }
-            else if (separateCutResult)
+            else if (separateCutResult && cuttingResults.Count > 0)
             {
                 ResolveCutResult(cuttingResults[0], true);
             }
